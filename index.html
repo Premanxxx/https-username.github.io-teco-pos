@@ -318,6 +318,25 @@ body.pwa-mode .bottom-nav {
   body { -webkit-user-select: none; user-select: none; }
 }
 
+
+/* Sync, Expense, Admin Delete */
+.sync-pill{background:rgba(255,255,255,0.18);padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.sync-pill.online{background:#E8F5E9;color:#2E7D32}
+.sync-pill.local{background:#FFF3E0;color:#E65100}
+.sync-pill.error{background:#FFEBEE;color:#C62828}
+.danger-btn{background:#C62828!important;color:white!important}
+.info-box{background:#FFF8E1;border-left:4px solid #FFB300;border-radius:10px;padding:12px;font-size:13px;line-height:1.55;margin-bottom:14px;color:#5D4037}
+.expense-item{display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid #f0f0f0}
+.expense-item:last-child{border-bottom:none}
+.expense-icon{width:40px;height:40px;background:#FFF3E0;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.expense-info{flex:1;min-width:0}
+.expense-title{font-size:13px;font-weight:700;color:var(--dark)}
+.expense-meta{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
+.expense-amount{font-size:14px;font-weight:800;color:#C62828;text-align:right;white-space:nowrap}
+.small-help{font-size:11px;color:var(--gray);line-height:1.45;margin-top:4px}
+.code-box{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#212121;color:white;border-radius:12px;padding:12px;font-size:11px;line-height:1.5;white-space:pre-wrap;overflow:auto;max-height:240px}
+@media(max-width:600px){.sync-pill{display:none}.modal-footer{flex-wrap:wrap}}
+
 </style>
 </head>
 <body>
@@ -338,7 +357,7 @@ body.pwa-mode .bottom-nav {
 <button onclick="doLogin()">Masuk</button>
 <div class="login-error" id="loginError">PIN salah atau user tidak ditemukan</div>
 </div>
-<div class="version-tag">v2.0.0 | Te.Co Pandawa POS</div>
+<div class="version-tag">v2.2.0 Sync | Te.Co Pandawa POS</div>
 </div>
 
 <button id="installPwaBtn" onclick="installPWA()">📲 Install Aplikasi</button>
@@ -350,6 +369,7 @@ body.pwa-mode .bottom-nav {
 <h1>🥤 Te.Co Pandawa</h1>
 <div class="header-info">
 <span class="time-badge" id="headerTime">--:--</span>
+<span class="sync-pill local" id="syncStatus">Local</span>
 <span class="user-badge" id="headerUser">Kasir</span>
 </div>
 </div>
@@ -405,7 +425,17 @@ body.pwa-mode .bottom-nav {
 <div class="stat-card">
 <div class="stat-label">Pendapatan Hari Ini</div>
 <div class="stat-value" id="statTodayRevenue">Rp 0</div>
-<div class="stat-change">total</div>
+<div class="stat-change">omzet kotor</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Pengeluaran Hari Ini</div>
+<div class="stat-value" id="statTodayExpense">Rp 0</div>
+<div class="stat-change">biaya harian</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Saldo Bersih Hari Ini</div>
+<div class="stat-value" id="statTodayNet">Rp 0</div>
+<div class="stat-change">omzet - pengeluaran</div>
 </div>
 <div class="stat-card">
 <div class="stat-label">Transaksi Bulan Ini</div>
@@ -415,7 +445,17 @@ body.pwa-mode .bottom-nav {
 <div class="stat-card">
 <div class="stat-label">Pendapatan Bulan Ini</div>
 <div class="stat-value" id="statMonthRevenue">Rp 0</div>
-<div class="stat-change">total</div>
+<div class="stat-change">omzet kotor</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Pengeluaran Bulan Ini</div>
+<div class="stat-value" id="statMonthExpense">Rp 0</div>
+<div class="stat-change">biaya bulanan</div>
+</div>
+<div class="stat-card">
+<div class="stat-label">Saldo Bersih Bulan Ini</div>
+<div class="stat-value" id="statMonthNet">Rp 0</div>
+<div class="stat-change">omzet - pengeluaran</div>
 </div>
 </div>
 <div class="filter-bar">
@@ -468,10 +508,25 @@ body.pwa-mode .bottom-nav {
 <div class="admin-title">Edit Logo Struk</div>
 <div class="admin-desc">Ubah logo & header struk</div>
 </div>
+<div class="admin-card" onclick="openExpenseModal()">
+<div class="admin-icon">💸</div>
+<div class="admin-title">Pengeluaran Harian</div>
+<div class="admin-desc">Catatan biaya masuk laporan</div>
+</div>
+<div class="admin-card" onclick="openDeleteCashierModal()">
+<div class="admin-icon">🧹</div>
+<div class="admin-title">Hapus Data Kasir</div>
+<div class="admin-desc">Harian / bulanan per kasir</div>
+</div>
+<div class="admin-card" onclick="openSyncModal()">
+<div class="admin-icon">☁️</div>
+<div class="admin-title">Sinkronisasi</div>
+<div class="admin-desc">Status koneksi antardevice</div>
+</div>
 <div class="admin-card" onclick="openModal('modalReset')">
 <div class="admin-icon">🔄</div>
 <div class="admin-title">Reset Data</div>
-<div class="admin-desc">Hapus semua transaksi</div>
+<div class="admin-desc">Hapus semua transaksi & pengeluaran</div>
 </div>
 <div class="admin-card" onclick="openModal('modalActivity')">
 <div class="admin-icon">📋</div>
@@ -962,9 +1017,142 @@ body.pwa-mode .bottom-nav {
 </div>
 </div>
 
+
+<!-- Admin: Expense Modal -->
+<div class="modal-overlay" id="modalExpense">
+<div class="modal" style="max-width:520px">
+<div class="modal-header">
+<h2>💸 Catatan Pengeluaran Harian</h2>
+<button class="modal-close" onclick="closeModal('modalExpense')">×</button>
+</div>
+<div class="modal-body">
+<div class="info-box">Catatan pengeluaran ini akan mengurangi omzet pada laporan harian dan bulanan. Contoh: belanja bahan, listrik, parkir, transport, atau biaya operasional lain.</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div class="cash-input-group">
+<label>Tanggal</label>
+<input type="date" id="expenseDate">
+</div>
+<div class="cash-input-group">
+<label>Nominal</label>
+<input type="number" id="expenseAmount" placeholder="Contoh: 50000" inputmode="numeric">
+</div>
+</div>
+<div class="cash-input-group">
+<label>Kategori</label>
+<select id="expenseCategory" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="Bahan baku">Bahan baku</option>
+<option value="Operasional">Operasional</option>
+<option value="Transport">Transport</option>
+<option value="Listrik/Air">Listrik/Air</option>
+<option value="Gaji/Bonus">Gaji/Bonus</option>
+<option value="Lain-lain">Lain-lain</option>
+</select>
+</div>
+<div class="cash-input-group">
+<label>Catatan</label>
+<input type="text" id="expenseNote" placeholder="Contoh: beli susu, cup, es batu">
+</div>
+<button class="btn-primary" style="width:100%" onclick="addDailyExpense()">+ Simpan Pengeluaran</button>
+<div style="margin-top:18px;border-top:2px solid var(--light-gray);padding-top:12px">
+<h3 style="font-size:14px;margin-bottom:8px">Riwayat Pengeluaran Terbaru</h3>
+<div id="expenseList"></div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn-secondary" onclick="closeModal('modalExpense')">Tutup</button>
+</div>
+</div>
+</div>
+
+<!-- Admin: Delete Cashier Data Modal -->
+<div class="modal-overlay" id="modalDeleteCashier">
+<div class="modal" style="max-width:520px">
+<div class="modal-header">
+<h2>🧹 Hapus Data Kasir</h2>
+<button class="modal-close" onclick="closeModal('modalDeleteCashier')">×</button>
+</div>
+<div class="modal-body">
+<div class="info-box">Fitur ini menghapus data berdasarkan kasir dan periode tertentu. Gunakan saat ada data percobaan, salah input, atau tutup buku per kasir.</div>
+<div class="cash-input-group">
+<label>Pilih Kasir</label>
+<select id="deleteCashier" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="kasir1">Kasir 1</option>
+<option value="kasir2">Kasir 2</option>
+<option value="kasir3">Kasir 3</option>
+</select>
+</div>
+<div class="cash-input-group">
+<label>Jenis Periode</label>
+<select id="deletePeriod" onchange="toggleDeletePeriodFields()" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="daily">Harian</option>
+<option value="monthly">Bulanan</option>
+</select>
+</div>
+<div class="cash-input-group" id="deleteDateWrap">
+<label>Tanggal Harian</label>
+<input type="date" id="deleteDate">
+</div>
+<div class="cash-input-group" id="deleteMonthWrap" style="display:none">
+<label>Bulan</label>
+<input type="month" id="deleteMonth">
+</div>
+<div class="setting-item" style="padding:10px 0">
+<div class="setting-info">
+<div class="setting-name">Ikut hapus catatan pengeluaran kasir</div>
+<div class="setting-desc">Aktifkan jika pengeluaran yang dibuat kasir tersebut juga ingin dihapus.</div>
+</div>
+<div class="toggle active" id="deleteExpensesToggle" onclick="toggleSettingOnly(this)"></div>
+</div>
+<div class="cash-input-group">
+<label>Password Admin</label>
+<input type="password" id="deleteAdminPass" placeholder="Masukkan PIN admin" maxlength="6" inputmode="numeric">
+</div>
+<div id="deletePreview" class="small-help"></div>
+</div>
+<div class="modal-footer">
+<button class="btn-secondary" onclick="previewDeleteCashierData()">Cek Data</button>
+<button class="btn-primary danger-btn" onclick="deleteCashierData()">🗑️ Hapus</button>
+</div>
+</div>
+</div>
+
+<!-- Admin: Sync Modal -->
+<div class="modal-overlay" id="modalSync">
+<div class="modal" style="max-width:560px">
+<div class="modal-header">
+<h2>☁️ Sinkronisasi Antardevice</h2>
+<button class="modal-close" onclick="closeModal('modalSync')">×</button>
+</div>
+<div class="modal-body">
+<div class="info-box"><strong>Status:</strong> <span id="syncModalStatus">Local</span><br>File ini sudah disiapkan untuk sinkron Firebase Realtime Database. Isi konfigurasi Firebase pada bagian <strong>FIREBASE_CONFIG</strong> di file HTML, lalu upload ulang ke GitHub Pages.</div>
+<div class="code-box">const FIREBASE_CONFIG = {
+ const firebaseConfig = {
+ apiKey: "AIzaSyA2Q2fQTIFVjCq-prY7Y6LKxGc6IVqtZhI",
+  authDomain: "teman-coffee-pandawa.firebaseapp.com",
+  projectId: "teman-coffee-pandawa",
+  storageBucket: "teman-coffee-pandawa.firebasestorage.app",
+  messagingSenderId: "429319129688",
+  appId: "1:429319129688:web:c253bc472162579631d82d",
+  measurementId: "G-7JT6JJ81F1"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+};</div>
+<p class="small-help">Semua perangkat harus membuka URL HTML yang sama dan memakai konfigurasi Firebase yang sama. Setelah aktif, transaksi, menu, user, pengaturan, dan pengeluaran tersimpan di cloud.</p>
+</div>
+<div class="modal-footer">
+<button class="btn-secondary" onclick="closeModal('modalSync')">Tutup</button>
+</div>
+</div>
+</div>
+
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <script>
 // ==================== DATA ====================
 const DEFAULT_MENU = [
@@ -1001,11 +1189,28 @@ const DEFAULT_USERS = {
     admin:{name:'Admin',pin:'0000',role:'admin'}
 };
 
+// ==================== MULTI DEVICE SYNC CONFIG ====================
+// Isi konfigurasi ini dari Firebase Console agar data tersinkron di semua device.
+// Jika belum diisi, aplikasi tetap berjalan memakai localStorage di masing-masing device.
+const FIREBASE_CONFIG = {
+    apiKey: 'ISI_API_KEY_FIREBASE',
+    authDomain: 'ISI_PROJECT.firebaseapp.com',
+    databaseURL: 'https://ISI_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app',
+    projectId: 'ISI_PROJECT',
+    storageBucket: 'ISI_PROJECT.appspot.com',
+    messagingSenderId: 'ISI_SENDER_ID',
+    appId: 'ISI_APP_ID'
+};
+const FIREBASE_DB_PATH = 'teco_pos/teco-pandawa-main';
+let syncController = {enabled:false, ref:null, applyingRemote:false, lastPush:0};
+let currentReportType = 'daily';
+
 // ==================== STATE ====================
 let state = {
     currentUser: null,
     cart: [],
     transactions: [],
+    expenses: [],
     menu: [],
     users: {},
     settings: {
@@ -1031,19 +1236,23 @@ function init() {
     loadData();
     if(!state.menu.length) state.menu = JSON.parse(JSON.stringify(DEFAULT_MENU));
     if(!Object.keys(state.users).length) state.users = JSON.parse(JSON.stringify(DEFAULT_USERS));
-    if(!state.transactions.length) {
-        // Generate sample transactions for demo
-        generateSampleTransactions();
-    }
+    state.users = {...JSON.parse(JSON.stringify(DEFAULT_USERS)), ...state.users};
+    state.expenses = state.expenses || [];
+    initSync();
     renderMenu('all');
     updateTime();
     setInterval(updateTime, 1000);
     setupCategoryTabs();
     document.getElementById('filterDate').value = new Date().toISOString().split('T')[0];
+    setDefaultDateInputs();
 
     // Setup login enter key
     document.getElementById('loginPass').addEventListener('keypress', function(e) {
         if(e.key === 'Enter') doLogin();
+    });
+    ['deleteCashier','deleteDate','deleteMonth'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.addEventListener('change', previewDeleteCashierData);
     });
 }
 
@@ -1076,23 +1285,122 @@ function loadData() {
         const saved = localStorage.getItem('teco_pos_data');
         if(saved) {
             const parsed = JSON.parse(saved);
-            state.transactions = parsed.transactions || [];
-            state.menu = parsed.menu || [];
-            state.users = parsed.users || {};
-            state.settings = {...state.settings, ...(parsed.settings || {})};
+            applyDataPayload(parsed, false);
         }
     } catch(e) { console.error('Load error', e); }
 }
 
+function buildDataPayload() {
+    return {
+        transactions: state.transactions || [],
+        expenses: state.expenses || [],
+        menu: state.menu || [],
+        users: state.users || {},
+        settings: state.settings || {},
+        updatedAt: new Date().toISOString(),
+        updatedBy: state.currentUser ? state.currentUser.id : 'system'
+    };
+}
+
+function applyDataPayload(data, refreshUI = true) {
+    if(!data) return;
+    state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+    state.expenses = Array.isArray(data.expenses) ? data.expenses : [];
+    state.menu = Array.isArray(data.menu) ? data.menu : [];
+    state.users = data.users && typeof data.users === 'object' ? data.users : {};
+    state.settings = {...state.settings, ...(data.settings || {})};
+    localStorage.setItem('teco_pos_data', JSON.stringify(buildDataPayload()));
+    if(refreshUI) refreshAfterDataUpdate();
+}
+
 function saveData() {
     try {
-        localStorage.setItem('teco_pos_data', JSON.stringify({
-            transactions: state.transactions,
-            menu: state.menu,
-            users: state.users,
-            settings: state.settings
-        }));
+        const payload = buildDataPayload();
+        localStorage.setItem('teco_pos_data', JSON.stringify(payload));
+        if(syncController.enabled && syncController.ref && !syncController.applyingRemote) {
+            pushRemoteData(payload);
+        }
     } catch(e) { console.error('Save error', e); }
+}
+
+function isFirebaseConfigured() {
+    return !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.includes('ISI_') && FIREBASE_CONFIG.databaseURL && !FIREBASE_CONFIG.databaseURL.includes('ISI_PROJECT'));
+}
+
+function initSync() {
+    if(!isFirebaseConfigured()) {
+        updateSyncStatus('Local', 'local');
+        return;
+    }
+    if(typeof firebase === 'undefined') {
+        updateSyncStatus('Firebase gagal dimuat', 'error');
+        return;
+    }
+    try {
+        if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+        syncController.ref = firebase.database().ref(FIREBASE_DB_PATH);
+        syncController.enabled = true;
+        updateSyncStatus('Menyambungkan...', 'local');
+
+        syncController.ref.on('value', snapshot => {
+            const remote = snapshot.val();
+            if(!remote) {
+                pushRemoteData(buildDataPayload());
+                updateSyncStatus('Online', 'online');
+                return;
+            }
+            syncController.applyingRemote = true;
+            applyDataPayload(remote, true);
+            syncController.applyingRemote = false;
+            updateSyncStatus('Online', 'online');
+        }, err => {
+            console.error('Firebase sync error', err);
+            updateSyncStatus('Sync error', 'error');
+        });
+    } catch(e) {
+        console.error('Firebase init error', e);
+        updateSyncStatus('Sync error', 'error');
+    }
+}
+
+function pushRemoteData(payload) {
+    if(!syncController.ref) return;
+    updateSyncStatus('Menyimpan...', 'local');
+    syncController.ref.set(payload)
+        .then(() => updateSyncStatus('Online', 'online'))
+        .catch(err => { console.error('Push error', err); updateSyncStatus('Sync error', 'error'); });
+}
+
+function updateSyncStatus(text, mode) {
+    const el = document.getElementById('syncStatus');
+    if(el) {
+        el.textContent = text;
+        el.classList.remove('online','local','error');
+        el.classList.add(mode || 'local');
+    }
+    const modalEl = document.getElementById('syncModalStatus');
+    if(modalEl) modalEl.textContent = text;
+}
+
+function refreshAfterDataUpdate() {
+    const activeCat = document.querySelector('.category-tab.active')?.dataset.cat || 'all';
+    renderMenu(activeCat);
+    renderCart();
+    const activePage = document.querySelector('.page.active')?.id;
+    if(activePage === 'pageTrans') { loadTransactions(); updateStats(); }
+    if(activePage === 'pageReports') loadReportData(currentReportType || 'daily');
+    if(activePage === 'pageAdmin') loadAdminData();
+    if(activePage === 'pageSettings') loadSettings();
+    if(document.getElementById('modalExpense')?.classList.contains('active')) renderExpenseList();
+    if(document.getElementById('modalDeleteCashier')?.classList.contains('active')) previewDeleteCashierData();
+}
+
+function setDefaultDateInputs() {
+    const today = new Date().toISOString().split('T')[0];
+    const month = today.slice(0, 7);
+    ['expenseDate','deleteDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
+    const monthEl = document.getElementById('deleteMonth');
+    if(monthEl) monthEl.value = month;
 }
 
 // ==================== LOGIN ====================
@@ -1121,6 +1429,7 @@ function doLogin() {
 
         playSound('login');
         showToast('Selamat datang, ' + state.currentUser.name + '!');
+        updateStats();
 
         setTimeout(() => {
             document.getElementById('loginScreen').style.display = 'none';
@@ -1530,31 +1839,64 @@ function updateStats() {
 
     const todayTxs = state.transactions.filter(t => t.date.startsWith(today));
     const monthTxs = state.transactions.filter(t => t.date.startsWith(thisMonth));
+    const todayExpenses = state.expenses.filter(e => e.date === today);
+    const monthExpenses = state.expenses.filter(e => e.date && e.date.startsWith(thisMonth));
+
+    const todayRevenue = todayTxs.reduce((s,t) => s + (t.total || 0), 0);
+    const monthRevenue = monthTxs.reduce((s,t) => s + (t.total || 0), 0);
+    const todayExpenseTotal = todayExpenses.reduce((s,e) => s + (e.amount || 0), 0);
+    const monthExpenseTotal = monthExpenses.reduce((s,e) => s + (e.amount || 0), 0);
 
     document.getElementById('statTodayCount').textContent = todayTxs.length;
-    document.getElementById('statTodayRevenue').textContent = 'Rp ' + formatNumber(todayTxs.reduce((s,t) => s + t.total, 0));
+    document.getElementById('statTodayRevenue').textContent = 'Rp ' + formatNumber(todayRevenue);
     document.getElementById('statMonthCount').textContent = monthTxs.length;
-    document.getElementById('statMonthRevenue').textContent = 'Rp ' + formatNumber(monthTxs.reduce((s,t) => s + t.total, 0));
+    document.getElementById('statMonthRevenue').textContent = 'Rp ' + formatNumber(monthRevenue);
+    const te = document.getElementById('statTodayExpense');
+    const tn = document.getElementById('statTodayNet');
+    const me = document.getElementById('statMonthExpense');
+    const mn = document.getElementById('statMonthNet');
+    if(te) te.textContent = 'Rp ' + formatNumber(todayExpenseTotal);
+    if(tn) tn.textContent = 'Rp ' + formatNumber(todayRevenue - todayExpenseTotal);
+    if(me) me.textContent = 'Rp ' + formatNumber(monthExpenseTotal);
+    if(mn) mn.textContent = 'Rp ' + formatNumber(monthRevenue - monthExpenseTotal);
 }
 
 // ==================== EXCEL EXPORT ====================
+function escapeCsv(value) {
+    const str = String(value ?? '').replace(/"/g, '""');
+    return /[",\n]/.test(str) ? '"' + str + '"' : str;
+}
+
 function exportExcel() {
     const filterDate = document.getElementById('filterDate').value;
     let txs = state.transactions;
-    if(filterDate) txs = txs.filter(t => t.date.startsWith(filterDate));
+    let expenses = state.expenses;
+    if(filterDate) {
+        txs = txs.filter(t => t.date.startsWith(filterDate));
+        expenses = expenses.filter(e => e.date === filterDate);
+    }
 
-    if(txs.length === 0) { showToast('Tidak ada data untuk diexport'); return; }
+    if(txs.length === 0 && expenses.length === 0) { showToast('Tidak ada data untuk diexport'); return; }
 
-    let csv = 'No,ID Transaksi,Tanggal,Kasir,Item,Subtotal,PPN,Total,Metode,Status\n';
+    let csv = 'LAPORAN TRANSAKSI\n';
+    csv += 'No,ID Transaksi,Tanggal,Kasir,Item,Subtotal,PPN,Service,Total,Metode,Status\n';
     txs.forEach((tx, i) => {
         const items = tx.items.map(it => it.name + ' x' + it.qty).join('; ');
-        csv += `${i+1},${tx.id},${tx.date},${tx.cashierName},"${items}",${tx.subtotal},${tx.tax},${tx.total},${tx.payment},${tx.status}\n`;
+        csv += [i+1,tx.id,tx.date,tx.cashierName,escapeCsv(items),tx.subtotal,tx.tax,tx.service||0,tx.total,tx.payment,tx.status].join(',') + '\n';
     });
+    csv += '\nLAPORAN PENGELUARAN\n';
+    csv += 'No,Tanggal,Kategori,Catatan,Nominal,Dibuat Oleh\n';
+    expenses.forEach((e, i) => {
+        csv += [i+1,e.date,escapeCsv(e.category),escapeCsv(e.note),e.amount,escapeCsv(e.cashierName || e.cashier || '')].join(',') + '\n';
+    });
+    const revenue = txs.reduce((s,t)=>s+(t.total||0),0);
+    const expenseTotal = expenses.reduce((s,e)=>s+(e.amount||0),0);
+    csv += '\nRINGKASAN\nOmzet,' + revenue + '\nPengeluaran,' + expenseTotal + '\nSaldo Bersih,' + (revenue-expenseTotal) + '\n';
 
     const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'Transaksi_TeCo_' + (filterDate || new Date().toISOString().split('T')[0]) + '.csv';
+    link.download = 'Laporan_TeCo_' + (filterDate || new Date().toISOString().split('T')[0]) + '.csv';
     link.click();
     showToast('Data berhasil diexport!');
 }
@@ -1562,14 +1904,24 @@ function exportExcel() {
 function exportExcelMonthly() {
     const thisMonth = new Date().toISOString().slice(0, 7);
     const txs = state.transactions.filter(t => t.date.startsWith(thisMonth));
+    const expenses = state.expenses.filter(e => e.date && e.date.startsWith(thisMonth));
 
-    if(txs.length === 0) { showToast('Tidak ada data bulan ini'); return; }
+    if(txs.length === 0 && expenses.length === 0) { showToast('Tidak ada data bulan ini'); return; }
 
-    let csv = 'No,ID Transaksi,Tanggal,Kasir,Item,Subtotal,PPN,Total,Metode,Status\n';
+    let csv = 'LAPORAN BULANAN TRANSAKSI\n';
+    csv += 'No,ID Transaksi,Tanggal,Kasir,Item,Subtotal,PPN,Service,Total,Metode,Status\n';
     txs.forEach((tx, i) => {
         const items = tx.items.map(it => it.name + ' x' + it.qty).join('; ');
-        csv += `${i+1},${tx.id},${tx.date},${tx.cashierName},"${items}",${tx.subtotal},${tx.tax},${tx.total},${tx.payment},${tx.status}\n`;
+        csv += [i+1,tx.id,tx.date,tx.cashierName,escapeCsv(items),tx.subtotal,tx.tax,tx.service||0,tx.total,tx.payment,tx.status].join(',') + '\n';
     });
+    csv += '\nLAPORAN BULANAN PENGELUARAN\n';
+    csv += 'No,Tanggal,Kategori,Catatan,Nominal,Dibuat Oleh\n';
+    expenses.forEach((e, i) => {
+        csv += [i+1,e.date,escapeCsv(e.category),escapeCsv(e.note),e.amount,escapeCsv(e.cashierName || e.cashier || '')].join(',') + '\n';
+    });
+    const revenue = txs.reduce((s,t)=>s+(t.total||0),0);
+    const expenseTotal = expenses.reduce((s,e)=>s+(e.amount||0),0);
+    csv += '\nRINGKASAN\nOmzet,' + revenue + '\nPengeluaran,' + expenseTotal + '\nSaldo Bersih,' + (revenue-expenseTotal) + '\n';
 
     const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
     const link = document.createElement('a');
@@ -1581,16 +1933,18 @@ function exportExcelMonthly() {
 
 // ==================== REPORTS ====================
 function switchReport(type) {
+    currentReportType = type;
     document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
+    if(event && event.target) event.target.classList.add('active');
     loadReportData(type);
 }
 
 function loadReports() {
-    loadReportData('daily');
+    loadReportData(currentReportType || 'daily');
 }
 
 function loadReportData(type) {
+    currentReportType = type;
     const chart = document.getElementById('salesChart');
     const summary = document.getElementById('reportSummary');
 
@@ -1600,59 +1954,65 @@ function loadReportData(type) {
             const d = new Date();
             d.setDate(d.getDate() - i);
             const key = d.toISOString().split('T')[0];
-            days[key] = {label: d.toLocaleDateString('id-ID',{weekday:'short'}), total:0, count:0};
+            days[key] = {label: d.toLocaleDateString('id-ID',{weekday:'short'}), total:0, expense:0, count:0};
         }
         state.transactions.forEach(t => {
             const d = t.date.split('T')[0];
-            if(days[d]) { days[d].total += t.total; days[d].count++; }
+            if(days[d]) { days[d].total += t.total || 0; days[d].count++; }
+        });
+        state.expenses.forEach(e => {
+            if(days[e.date]) days[e.date].expense += e.amount || 0;
         });
 
         const values = Object.values(days);
-        const maxVal = Math.max(...values.map(v => v.total), 1);
+        const maxVal = Math.max(...values.map(v => Math.max(v.total, v.total - v.expense)), 1);
 
         chart.innerHTML = values.map(v => `
-            <div class="chart-bar-item" style="height:${(v.total/maxVal*100)}%">
+            <div class="chart-bar-item" style="height:${(Math.max(v.total - v.expense,0)/maxVal*100)}%">
                 <span class="bar-value">${v.count}</span>
                 <span class="bar-label">${v.label}</span>
             </div>
         `).join('');
 
         const totalWeek = values.reduce((s,v) => s + v.total, 0);
+        const expenseWeek = values.reduce((s,v) => s + v.expense, 0);
         summary.innerHTML = `
-            <div class="setting-item">
-                <div class="setting-info"><div class="setting-name">Total Minggu Ini</div></div>
-                <div class="setting-action">Rp ${formatNumber(totalWeek)}</div>
-            </div>
-            <div class="setting-item">
-                <div class="setting-info"><div class="setting-name">Rata-rata Harian</div></div>
-                <div class="setting-action">Rp ${formatNumber(Math.round(totalWeek/7))}</div>
-            </div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Omzet Minggu Ini</div></div><div class="setting-action">Rp ${formatNumber(totalWeek)}</div></div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Pengeluaran Minggu Ini</div></div><div class="setting-action">Rp ${formatNumber(expenseWeek)}</div></div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Saldo Bersih Minggu Ini</div><div class="setting-desc">Omzet dikurangi pengeluaran</div></div><div class="setting-action">Rp ${formatNumber(totalWeek-expenseWeek)}</div></div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Rata-rata Bersih Harian</div></div><div class="setting-action">Rp ${formatNumber(Math.round((totalWeek-expenseWeek)/7))}</div></div>
         `;
     } else if(type === 'monthly') {
         const months = {};
         state.transactions.forEach(t => {
             const m = t.date.slice(0, 7);
-            if(!months[m]) months[m] = {label: m, total:0, count:0};
-            months[m].total += t.total;
+            if(!months[m]) months[m] = {label: m, total:0, expense:0, count:0};
+            months[m].total += t.total || 0;
             months[m].count++;
         });
+        state.expenses.forEach(e => {
+            const m = e.date ? e.date.slice(0, 7) : '';
+            if(!m) return;
+            if(!months[m]) months[m] = {label: m, total:0, expense:0, count:0};
+            months[m].expense += e.amount || 0;
+        });
 
-        const values = Object.values(months).slice(-6);
-        const maxVal = Math.max(...values.map(v => v.total), 1);
+        const values = Object.values(months).sort((a,b)=>a.label.localeCompare(b.label)).slice(-6);
+        const maxVal = Math.max(...values.map(v => Math.max(v.total - v.expense, 0)), 1);
 
         chart.innerHTML = values.map(v => `
-            <div class="chart-bar-item" style="height:${(v.total/maxVal*100)}%">
+            <div class="chart-bar-item" style="height:${(Math.max(v.total-v.expense,0)/maxVal*100)}%">
                 <span class="bar-value">${v.count}</span>
                 <span class="bar-label">${v.label}</span>
             </div>
         `).join('');
 
         const total = values.reduce((s,v) => s + v.total, 0);
+        const expense = values.reduce((s,v) => s + v.expense, 0);
         summary.innerHTML = `
-            <div class="setting-item">
-                <div class="setting-info"><div class="setting-name">Total 6 Bulan Terakhir</div></div>
-                <div class="setting-action">Rp ${formatNumber(total)}</div>
-            </div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Omzet 6 Bulan Terakhir</div></div><div class="setting-action">Rp ${formatNumber(total)}</div></div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Pengeluaran 6 Bulan Terakhir</div></div><div class="setting-action">Rp ${formatNumber(expense)}</div></div>
+            <div class="setting-item"><div class="setting-info"><div class="setting-name">Saldo Bersih 6 Bulan Terakhir</div></div><div class="setting-action">Rp ${formatNumber(total-expense)}</div></div>
         `;
     } else {
         const products = {};
@@ -1667,14 +2027,14 @@ function loadReportData(type) {
         const sorted = Object.entries(products).sort((a,b) => b[1].count - a[1].count).slice(0, 7);
         const maxVal = Math.max(...sorted.map(v => v[1].count), 1);
 
-        chart.innerHTML = sorted.map(v => `
+        chart.innerHTML = sorted.length ? sorted.map(v => `
             <div class="chart-bar-item" style="height:${(v[1].count/maxVal*100)}%">
                 <span class="bar-value">${v[1].count}</span>
                 <span class="bar-label">${v[0].substring(0,8)}</span>
             </div>
-        `).join('');
+        `).join('') : '<div class="empty-state"><div class="empty-icon">📊</div><p>Belum ada data produk</p></div>';
 
-        summary.innerHTML = sorted.map(v => `
+        summary.innerHTML = sorted.length ? sorted.map(v => `
             <div class="setting-item">
                 <div class="setting-info">
                     <div class="setting-name">${v[0]}</div>
@@ -1682,7 +2042,7 @@ function loadReportData(type) {
                 </div>
                 <div class="setting-action">Rp ${formatNumber(v[1].revenue)}</div>
             </div>
-        `).join('');
+        `).join('') : '<div class="empty-state"><p>Belum ada transaksi produk.</p></div>';
     }
 }
 
@@ -1703,7 +2063,17 @@ function loadAdminData() {
     // Activity list
     const activityList = document.getElementById('activityList');
     const recentTxs = state.transactions.slice(0, 20);
-    activityList.innerHTML = recentTxs.map(tx => {
+    const latestExpenses = (state.expenses || []).slice(0, 10);
+    const expenseHtml = latestExpenses.map(e => `
+        <div class="activity-item">
+            <div class="activity-dot" style="background:#E65100"></div>
+            <div class="activity-content">
+                <div class="activity-text"><strong>${e.cashierName || '-'}</strong> mencatat pengeluaran <strong>${e.category}</strong> - Rp ${formatNumber(e.amount || 0)}</div>
+                <div class="activity-time">${e.date} · ${e.note || '-'}</div>
+            </div>
+        </div>
+    `).join('');
+    activityList.innerHTML = expenseHtml + recentTxs.map(tx => {
         const date = new Date(tx.date);
         return `
             <div class="activity-item">
@@ -1735,9 +2105,10 @@ function resetAllData() {
         showToast('Password admin salah!');
         return;
     }
-    if(!confirm('Yakin ingin menghapus SEMUA data transaksi?')) return;
+    if(!confirm('Yakin ingin menghapus SEMUA data transaksi dan pengeluaran?')) return;
 
     state.transactions = [];
+    state.expenses = [];
     saveData();
     closeModal('modalReset');
     showToast('Semua data berhasil direset!');
@@ -1803,6 +2174,148 @@ function importData() {
     reader.readAsText(file);
 }
 
+
+function openExpenseModal() {
+    if(!ensureAdmin()) return;
+    setDefaultDateInputs();
+    renderExpenseList();
+    openModal('modalExpense');
+}
+
+function addDailyExpense() {
+    if(!ensureAdmin()) return;
+    const date = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
+    const amount = parseInt(document.getElementById('expenseAmount').value) || 0;
+    const category = document.getElementById('expenseCategory').value || 'Lain-lain';
+    const note = document.getElementById('expenseNote').value.trim();
+    if(amount <= 0) { showToast('Nominal pengeluaran harus lebih dari 0'); return; }
+    const expense = {
+        id: 'EXP' + Date.now().toString().slice(-8),
+        date,
+        amount,
+        category,
+        note: note || '-',
+        cashier: state.currentUser.id,
+        cashierName: state.currentUser.name,
+        createdAt: new Date().toISOString()
+    };
+    state.expenses.unshift(expense);
+    saveData();
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseNote').value = '';
+    renderExpenseList();
+    updateStats();
+    showToast('Pengeluaran berhasil disimpan');
+}
+
+function renderExpenseList() {
+    const list = document.getElementById('expenseList');
+    if(!list) return;
+    const expenses = [...(state.expenses || [])].sort((a,b)=>(b.createdAt||b.date).localeCompare(a.createdAt||a.date)).slice(0, 30);
+    if(!expenses.length) {
+        list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><p>Belum ada catatan pengeluaran</p></div>';
+        return;
+    }
+    list.innerHTML = expenses.map(e => `
+        <div class="expense-item">
+            <div class="expense-icon">💸</div>
+            <div class="expense-info">
+                <div class="expense-title">${e.category}</div>
+                <div class="expense-meta">${e.date} · ${e.cashierName || '-'}<br>${e.note || '-'}</div>
+            </div>
+            <div>
+                <div class="expense-amount">Rp ${formatNumber(e.amount || 0)}</div>
+                <button class="btn-secondary" style="padding:5px 8px;font-size:11px;margin-top:6px" onclick="deleteExpense('${e.id}')">Hapus</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function deleteExpense(expenseId) {
+    if(!ensureAdmin()) return;
+    if(!confirm('Hapus catatan pengeluaran ini?')) return;
+    state.expenses = state.expenses.filter(e => e.id !== expenseId);
+    saveData();
+    renderExpenseList();
+    updateStats();
+    showToast('Pengeluaran dihapus');
+}
+
+function openDeleteCashierModal() {
+    if(!ensureAdmin()) return;
+    setDefaultDateInputs();
+    toggleDeletePeriodFields();
+    previewDeleteCashierData();
+    openModal('modalDeleteCashier');
+}
+
+function toggleDeletePeriodFields() {
+    const period = document.getElementById('deletePeriod')?.value || 'daily';
+    const dateWrap = document.getElementById('deleteDateWrap');
+    const monthWrap = document.getElementById('deleteMonthWrap');
+    if(dateWrap) dateWrap.style.display = period === 'daily' ? 'block' : 'none';
+    if(monthWrap) monthWrap.style.display = period === 'monthly' ? 'block' : 'none';
+    previewDeleteCashierData();
+}
+
+function getDeleteTarget() {
+    const cashier = document.getElementById('deleteCashier')?.value || 'kasir1';
+    const period = document.getElementById('deletePeriod')?.value || 'daily';
+    const key = period === 'daily' ? document.getElementById('deleteDate')?.value : document.getElementById('deleteMonth')?.value;
+    const includeExpenses = document.getElementById('deleteExpensesToggle')?.classList.contains('active');
+    return {cashier, period, key, includeExpenses};
+}
+
+function previewDeleteCashierData() {
+    const preview = document.getElementById('deletePreview');
+    if(!preview) return;
+    const {cashier, key, includeExpenses} = getDeleteTarget();
+    if(!key) { preview.textContent = 'Pilih periode terlebih dahulu.'; return; }
+    const txCount = state.transactions.filter(t => t.cashier === cashier && t.date.startsWith(key)).length;
+    const expCount = includeExpenses ? state.expenses.filter(e => e.cashier === cashier && e.date && e.date.startsWith(key)).length : 0;
+    preview.textContent = `Data yang cocok: ${txCount} transaksi${includeExpenses ? ' dan ' + expCount + ' pengeluaran' : ''}.`;
+}
+
+function deleteCashierData() {
+    if(!ensureAdmin()) return;
+    const pass = document.getElementById('deleteAdminPass').value;
+    if(pass !== state.users.admin.pin) { showToast('Password admin salah!'); return; }
+    const {cashier, period, key, includeExpenses} = getDeleteTarget();
+    if(!key) { showToast('Pilih periode dahulu'); return; }
+    const cashierName = state.users[cashier]?.name || cashier;
+    const txCount = state.transactions.filter(t => t.cashier === cashier && t.date.startsWith(key)).length;
+    const expCount = includeExpenses ? state.expenses.filter(e => e.cashier === cashier && e.date && e.date.startsWith(key)).length : 0;
+    if(txCount === 0 && expCount === 0) { showToast('Tidak ada data yang cocok'); return; }
+    const label = period === 'daily' ? 'tanggal ' + key : 'bulan ' + key;
+    if(!confirm(`Hapus ${txCount} transaksi${includeExpenses ? ' dan ' + expCount + ' pengeluaran' : ''} milik ${cashierName} pada ${label}?`)) return;
+    state.transactions = state.transactions.filter(t => !(t.cashier === cashier && t.date.startsWith(key)));
+    if(includeExpenses) state.expenses = state.expenses.filter(e => !(e.cashier === cashier && e.date && e.date.startsWith(key)));
+    saveData();
+    closeModal('modalDeleteCashier');
+    loadTransactions();
+    updateStats();
+    showToast('Data kasir berhasil dihapus');
+}
+
+function openSyncModal() {
+    if(!ensureAdmin()) return;
+    updateSyncStatus(document.getElementById('syncStatus')?.textContent || 'Local', document.getElementById('syncStatus')?.classList.contains('online') ? 'online' : 'local');
+    openModal('modalSync');
+}
+
+function ensureAdmin() {
+    if(!state.currentUser || state.currentUser.role !== 'admin') {
+        showToast('Fitur ini hanya untuk Admin');
+        return false;
+    }
+    return true;
+}
+
+function toggleSettingOnly(el) {
+    el.classList.toggle('active');
+    previewDeleteCashierData();
+}
+
 // ==================== SETTINGS ====================
 function loadSettings() {
     document.getElementById('storeName').value = state.settings.storeName;
@@ -1814,6 +2327,12 @@ function loadSettings() {
     document.getElementById('receiptStoreAddress').value = state.settings.storeAddress;
     document.getElementById('receiptStorePhone').value = state.settings.storePhone;
     document.getElementById('receiptFooter').value = state.settings.receiptFooter;
+    const darkToggle = document.getElementById('toggleDark');
+    const soundToggle = document.getElementById('toggleSound');
+    const autoPrintToggle = document.getElementById('toggleAutoPrint');
+    if(darkToggle) darkToggle.classList.toggle('active', !!state.settings.darkMode);
+    if(soundToggle) soundToggle.classList.toggle('active', state.settings.sound !== false);
+    if(autoPrintToggle) autoPrintToggle.classList.toggle('active', !!state.settings.autoPrint);
 
     // Menu edit list
     const menuList = document.getElementById('menuEditList');
@@ -1876,6 +2395,7 @@ function deleteMenuItem(idx) {
 function backupData() {
     const data = JSON.stringify({
         transactions: state.transactions,
+        expenses: state.expenses,
         menu: state.menu,
         users: state.users,
         settings: state.settings,
@@ -1966,97 +2486,6 @@ function playSound(type) {
 
 // ==================== START ====================
 document.addEventListener('DOMContentLoaded', init);
-</script>
-
-<!-- PWA Service Worker Registration -->
-<script>
-// Register Service Worker for offline support
-(function() {
-  const swCode = atob( + base64.b64encode(service_worker_js.encode()).decode() + );
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      const swBlob = new Blob([swCode], { type: 'application/javascript' });
-      const swUrl = URL.createObjectURL(swBlob);
-
-      navigator.serviceWorker.register(swUrl)
-        .then(function(registration) {
-          console.log('Te.Co POS: Service Worker registered', registration.scope);
-          if (navigator.storage && navigator.storage.persist) {
-            navigator.storage.persist().then(function(persistent) {
-              if (persistent) console.log('Te.Co POS: Persistent storage granted');
-            });
-          }
-        })
-        .catch(function(error) {
-          console.log('Te.Co POS: SW registration failed', error);
-        });
-    });
-  }
-
-  // PWA Install Prompt
-  let deferredPrompt;
-  window.addEventListener('beforeinstallprompt', function(e) {
-    e.preventDefault();
-    deferredPrompt = e;
-    console.log('Te.Co POS: Install prompt available');
-    var installBtn = document.getElementById('installPwaBtn');
-    if (installBtn) installBtn.style.display = 'flex';
-  });
-
-  window.addEventListener('appinstalled', function() {
-    console.log('Te.Co POS: App installed');
-    deferredPrompt = null;
-    var installBtn = document.getElementById('installPwaBtn');
-    if (installBtn) installBtn.style.display = 'none';
-    showToast('✅ Aplikasi berhasil diinstall!');
-  });
-
-  window.isRunningAsPWA = function() {
-    return window.matchMedia('(display-mode: standalone)').matches || 
-           window.navigator.standalone === true;
-  };
-
-  if (window.isRunningAsPWA()) {
-    document.body.classList.add('pwa-mode');
-  }
-
-  // Override installPWA function
-  window.installPWA = function() {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(function(choiceResult) {
-        deferredPrompt = null;
-      });
-    } else if (window.isRunningAsPWA()) {
-      showToast('✅ Aplikasi sudah terinstall');
-    } else {
-      showToast('📲 Buka menu browser dan pilih "Add to Home Screen"');
-    }
-  };
-
-  // Enhanced backup function
-  window.backupData = function() {
-    var data = {
-      transactions: JSON.parse(localStorage.getItem('transactions') || '[]'),
-      users: JSON.parse(localStorage.getItem('users') || '{}'),
-      settings: JSON.parse(localStorage.getItem('settings') || '{}'),
-      menu: JSON.parse(localStorage.getItem('menu') || '{}'),
-      timestamp: new Date().toISOString(),
-      version: '2.1.0'
-    };
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'teco-pos-backup-' + new Date().toISOString().slice(0,10) + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('💾 Backup berhasil disimpan');
-  };
-})();
 </script>
 
 </body>
