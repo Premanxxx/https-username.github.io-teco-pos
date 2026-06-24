@@ -1,79 +1,111 @@
-# Te.Co POS — Analytics Add-on v1.0.0
+# Te.Co POS — Analytics Add-on v1.2.0
 
-Modul ini menambahkan fitur berikut tanpa menghapus fungsi lama aplikasi:
+Add-on ini menempatkan fitur **Analisis Penjualan & Bahan** di dalam tab **Laporan** aplikasi Te.Co POS. Fitur tidak muncul pada halaman login dan otomatis ditutup saat pengguna logout.
 
-- Pesan WhatsApp berisi **total transaksi, total cup, dan akumulasi setiap varian**.
-- Rekap **harian dan bulanan**.
-- Ekspor Excel dengan sheet:
-  - Ringkasan Harian/Bulanan
-  - Varian Harian/Bulanan
-  - Bahan Harian/Bulanan
-  - Transaksi Harian/Bulanan
-  - Mapping Produk
-  - Master Resep
-- Analisis bahan terpakai berdasarkan resep dan jumlah cup terjual.
-- Mapping otomatis dan manual antara nama menu pada transaksi dengan resep.
-- Perhitungan kebutuhan konsentrat serta bahan baku pembentuk konsentrat.
+## Hak akses
 
-## File yang dipakai
+| Fitur | Admin | Kasir |
+|---|---:|---:|
+| Laporan harian dan bulanan | Ya | Ya, akun sendiri |
+| Total cup, varian, omzet, dan analisis bahan | Ya | Ya, akun sendiri |
+| WhatsApp dan ekspor Excel | Ya | Ya, akun sendiri |
+| Penyesuaian data laporan | Semua kasir | Hanya milik sendiri |
+| Mapping produk ke resep | Ya | Tidak |
+| Daftar/master resep | Ya | Tidak |
+| Pengaturan analisis dan Firebase | Ya | Tidak |
 
-- `teco-analytics-addon.js` — modul utama.
-- `analytics.html` — halaman laporan cadangan/mandiri.
-- `resep-teco.json` — salinan resep yang sudah dirapikan.
-- `pasang_addon.py` — pemasang otomatis untuk komputer/Codespaces.
+Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebagai catatan terpisah, lalu diperhitungkan pada rekap cup, omzet, varian, WhatsApp, Excel, dan analisis bahan.
 
-## Cara pasang melalui GitHub Web
+## Fitur laporan
 
-1. Buka repositori `Premanxxx/https-username.github.io-teco-pos`.
-2. Pilih **Add file → Upload files**.
-3. Unggah `teco-analytics-addon.js` dan `analytics.html` ke folder utama repositori.
-4. Buka file `index.html`, tekan ikon pensil **Edit this file**.
-5. Tepat sebelum tag `</body>`, tambahkan:
+- Rekap total transaksi, total cup, varian, omzet, dan jumlah penyesuaian.
+- Rekap harian dan bulanan.
+- Akumulasi setiap varian yang terjual.
+- Analisis pemakaian bahan berdasarkan resep per cup.
+- Perhitungan konsentrat dan bahan pembentuk konsentrat.
+- Pesan WhatsApp laporan harian atau bulanan.
+- Ekspor Excel dengan sheet Ringkasan, Varian, Bahan, Transaksi, dan Penyesuaian.
+- Khusus ekspor Admin: sheet Mapping Produk dan Master Resep.
+
+## File
+
+- `teco-analytics-addon.js` — add-on utama.
+- `analytics.html` — halaman petunjuk/akses kembali ke aplikasi utama.
+- `README_PASANG.md` — panduan ini.
+
+## Cara pasang di GitHub
+
+1. Buka repositori aplikasi Te.Co POS.
+2. Unggah atau ganti file `teco-analytics-addon.js` dan `analytics.html` di folder yang sama dengan `index.html`.
+3. Buka `index.html` dan pastikan baris berikut berada tepat sebelum `</body>`:
 
 ```html
-<script src="./teco-analytics-addon.js?v=1.0.0"></script>
+<script src="./teco-analytics-addon.js?v=1.2.0"></script>
 ```
 
-6. Tekan **Commit changes**.
-7. Setelah GitHub Pages memperbarui situs, lakukan hard refresh (`Ctrl + F5`).
+4. Hapus baris pemanggilan add-on versi lama bila ada, supaya file tidak dimuat dua kali.
+5. Commit perubahan.
+6. Setelah GitHub Pages diperbarui, lakukan hard refresh (`Ctrl + F5`) atau bersihkan cache aplikasi/PWA.
 
-Tombol **Analisis Penjualan** akan muncul di kanan bawah. Tombol lama **Export Excel**, **Export Bulanan**, **Kirim WA Owner**, dan **Kirim Laporan ke Owner** juga diarahkan ke laporan baru.
+## Cara penggunaan
 
-## Cara pasang otomatis
+1. Login sebagai Admin atau Kasir.
+2. Buka tab **Laporan**.
+3. Pilih kartu **Analisis Penjualan & Bahan**.
 
-Letakkan file berikut pada folder yang sama dengan `index.html`:
+### Admin
 
-- `teco-analytics-addon.js`
-- `analytics.html`
-- `pasang_addon.py`
+Admin memperoleh tab:
 
-Kemudian jalankan:
+- Harian
+- Bulanan
+- Penyesuaian Laporan
+- Mapping Resep
+- Daftar Resep
+- Pengaturan
 
-```bash
-python pasang_addon.py index.html
-```
+Admin dapat membuat atau mengoreksi penyesuaian untuk semua kasir.
 
-Program membuat backup `index.html.backup-sebelum-analytics` sebelum melakukan perubahan.
+### Kasir
 
-## Pengaturan awal
+Kasir memperoleh tab:
 
-Masuk sebagai Admin, buka **Analisis Penjualan → Pengaturan**, lalu periksa:
+- Harian
+- Bulanan
+- Penyesuaian Laporan
 
-1. Nomor WhatsApp owner. Gunakan format `628xxxxxxxxxx`.
+Pilihan kasir dikunci ke akun yang sedang login. Kasir tidak dapat membuka atau menjalankan fungsi Mapping Resep, Daftar Resep, dan Pengaturan.
+
+## Penyesuaian laporan
+
+Isi data berikut:
+
+- Tanggal
+- Kasir
+- Varian
+- Koreksi cup, misalnya `-1` atau `+2`
+- Koreksi omzet, misalnya `-10000` atau `+15000`
+- Catatan/alasan
+
+Penyesuaian disimpan pada perangkat dan dicoba disinkronkan ke Firebase pada path `analyticsAdjustments`. Bila aturan Firebase menolak penulisan, data tetap tersimpan pada perangkat tersebut dan aplikasi menampilkan pemberitahuan kegagalan sinkron.
+
+## Pengaturan awal Admin
+
+Buka **Analisis Penjualan & Bahan → Pengaturan**, lalu periksa:
+
+1. Nomor WhatsApp owner dengan format `628xxxxxxxxxx`.
 2. Hasil satu batch konsentrat. Nilai awal `1000 ml` karena file resep tidak mencantumkan hasil akhir batch.
-3. URL Firebase. Nilai awal sudah mengarah ke database aplikasi.
-4. Mapping resep. Buka tab **Mapping Resep** untuk produk yang belum dikenali otomatis.
+3. URL Firebase Realtime Database.
+4. Mapping resep untuk produk yang belum dikenali otomatis.
 
-## Catatan resep
+## Catatan keamanan
 
-- `Fruktosaa` dirapikan menjadi `Fruktosa`.
-- `Gula Arenn` dirapikan menjadi `Gula Aren`.
-- `Cup + Tutup` dihitung otomatis satu set untuk setiap cup terjual, termasuk `KOPI MILO` yang tidak mencantumkan kemasan pada file sumber.
-- Bahan `Konsentrat` dapat diuraikan menjadi Kental Manis, Krimer, Sirup Vanilla, Robusta, dan Air berdasarkan hasil batch yang ditetapkan.
+Pembatasan peran diterapkan pada antarmuka dan fungsi add-on. Karena aplikasi berupa situs statis, keamanan tingkat server tetap bergantung pada Firebase Security Rules. Aturan Firebase sebaiknya membatasi perubahan pengaturan dan data admin bila aplikasi nantinya memakai autentikasi Firebase.
 
-## Jika data belum muncul
+## Jika fitur belum muncul
 
-- Pastikan aplikasi dan `analytics.html` dibuka dari domain GitHub Pages yang sama.
-- Pastikan Firebase mengizinkan pembacaan data oleh aplikasi.
-- Tekan **Muat Ulang** pada panel laporan.
-- Periksa tab **Mapping Resep** jika bahan belum terhitung.
+- Pastikan pengguna sudah login.
+- Pastikan kartu dibuka dari tab **Laporan**, bukan dari `analytics.html` secara langsung.
+- Pastikan hanya ada satu pemanggilan `teco-analytics-addon.js`.
+- Ubah query cache menjadi `v=1.2.0`.
+- Lakukan `Ctrl + F5` atau hapus cache PWA/browser.

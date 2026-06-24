@@ -1,10 +1,10 @@
 /*
- * Te.Co Pandawa POS — Analytics Add-on v1.0.0
+ * Te.Co Pandawa POS — Analytics Add-on v1.2.0
  * Adds daily/monthly variant recap, WhatsApp report, Excel sheets,
  * and ingredient usage analysis based on the uploaded recipe workbook.
  *
  * Install: add before </body> in the existing index.html:
- * <script src="./teco-analytics-addon.js?v=1.0.0"></script>
+ * <script src="./teco-analytics-addon.js?v=1.2.0"></script>
  */
 (function () {
   'use strict';
@@ -12,9 +12,10 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.2.0';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
+  const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
   const FIREBASE_DB_URL = 'https://teman-coffee-pandawa-default-rtdb.asia-southeast1.firebasedatabase.app';
   const XLSX_CDN = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 
@@ -153,6 +154,8 @@
 
   const state = {
     settings: loadSettings(),
+    adjustments: loadAdjustments(),
+    session: { authenticated: false, role: 'guest', name: '' },
     transactions: [],
     sources: [],
     loadErrors: [],
@@ -177,6 +180,49 @@
 
   function saveSettings() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  }
+
+  function loadAdjustments() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(ADJUSTMENTS_KEY) || '[]');
+      return Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveAdjustments() {
+    localStorage.setItem(ADJUSTMENTS_KEY, JSON.stringify(state.adjustments));
+  }
+
+  function normalizeAdjustmentCollection(value) {
+    const rows = Array.isArray(value) ? value : (value && typeof value === 'object' ? Object.values(value) : []);
+    return rows.filter((row) => row && typeof row === 'object' && row.id && row.date && row.cashier && row.variant)
+      .map((row) => ({
+        id: String(row.id),
+        date: String(row.date),
+        cashier: String(row.cashier),
+        variant: String(row.variant),
+        qtyDelta: toNumber(row.qtyDelta),
+        revenueDelta: toNumber(row.revenueDelta),
+        note: String(row.note || ''),
+        createdAt: String(row.createdAt || ''),
+        createdBy: String(row.createdBy || ''),
+        updatedAt: String(row.updatedAt || ''),
+        updatedBy: String(row.updatedBy || '')
+      }));
+  }
+
+  function mergeAdjustments(...collections) {
+    const map = new Map();
+    collections.flat().forEach((row) => {
+      if (!row || !row.id) return;
+      const existing = map.get(String(row.id));
+      const stamp = String(row.updatedAt || row.createdAt || '');
+      const existingStamp = existing ? String(existing.updatedAt || existing.createdAt || '') : '';
+      if (!existing || stamp >= existingStamp) map.set(String(row.id), row);
+    });
+    return Array.from(map.values());
   }
 
   function normalizeText(value) {
@@ -454,7 +500,7 @@
     const sources = [];
     for (let i = 0; i < localStorage.length; i += 1) {
       const key = localStorage.key(i);
-      if (!key || key === SETTINGS_KEY) continue;
+      if (!key || key === SETTINGS_KEY || key === ADJUSTMENTS_KEY) continue;
       const raw = localStorage.getItem(key);
       if (!raw || raw.length < 2) continue;
       try {
@@ -495,7 +541,8 @@
     const data = await response.json();
     maybeDiscoverOwnerNumber(data);
     const txs = extractTransactions(data, 'firebase');
-    return { data, txs, sources: txs.length ? [{ name: 'Firebase Realtime Database', count: txs.length }] : [] };
+    const adjustments = normalizeAdjustmentCollection(data && (data.analyticsAdjustments || data.tecoAnalyticsAdjustments));
+    return { data, txs, adjustments, sources: txs.length ? [{ name: 'Firebase Realtime Database', count: txs.length }] : [] };
   }
 
   function maybeDiscoverOwnerNumber(root) {
@@ -524,6 +571,10 @@
   }
 
   async function loadTransactions() {
+    if (!isAuthenticated()) {
+      console.warn('[TeCo Analytics] Data tidak dimuat karena pengguna belum login.');
+      return;
+    }
     if (state.loading) return;
     state.loading = true;
     state.loadErrors = [];
@@ -539,14 +590,18 @@
     all.push(...globals.txs);
     sources.push(...globals.sources);
 
+    let cloudAdjustments = [];
     try {
       const firebase = await fetchFirebaseData();
       all.push(...firebase.txs);
       sources.push(...firebase.sources);
+      cloudAdjustments = firebase.adjustments || [];
     } catch (err) {
       state.loadErrors.push(`Firebase: ${err && err.message ? err.message : err}`);
     }
 
+    state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
+    saveAdjustments();
     state.transactions = dedupeTransactions(all);
     state.sources = sources;
     state.lastLoadedAt = new Date();
@@ -586,6 +641,18 @@
     });
   }
 
+  function adjustmentMatchesPeriod(row, mode) {
+    const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
+    const date = String(row.date || '');
+    const periodMatch = mode === 'monthly' ? date.slice(0, 7) === period : date === period;
+    const cashierMatch = state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier);
+    return periodMatch && cashierMatch;
+  }
+
+  function reportAdjustments(mode) {
+    return state.adjustments.filter((row) => adjustmentMatchesPeriod(row, mode));
+  }
+
   function aggregate(mode) {
     const txs = filterTransactions(mode);
     const variants = new Map();
@@ -613,11 +680,31 @@
       });
     });
 
-    const variantRows = Array.from(variants.values()).sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+    const adjustments = reportAdjustments(mode);
+    adjustments.forEach((adjustment) => {
+      const label = String(adjustment.variant || 'Penyesuaian Umum').trim() || 'Penyesuaian Umum';
+      const key = normalizeText(label);
+      if (!variants.has(key)) {
+        variants.set(key, { key, name: label, qty: 0, revenue: 0, recipe: mapRecipe(label) });
+      }
+      const row = variants.get(key);
+      row.qty += toNumber(adjustment.qtyDelta);
+      row.revenue += toNumber(adjustment.revenueDelta);
+      totalRevenue += toNumber(adjustment.revenueDelta);
+    });
+
+    const variantRows = Array.from(variants.values())
+      .map((row) => Object.assign({}, row, { qty: Math.max(0, row.qty), revenue: Math.max(0, row.revenue) }))
+      .filter((row) => row.qty > 0 || row.revenue > 0)
+      .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+    totalCups = variantRows.reduce((sum, row) => sum + row.qty, 0);
+    totalRevenue = Math.max(0, totalRevenue);
     const materialResult = calculateMaterials(variantRows, totalCups);
     return {
       mode,
       txs,
+      adjustments,
+      adjustmentCount: adjustments.length,
       transactionCount: txs.length,
       totalRevenue,
       totalCups,
@@ -722,8 +809,10 @@
     const style = document.createElement('style');
     style.id = 'tecoAnalyticsStyles';
     style.textContent = `
-      #tecoAnalyticsFab{position:fixed;right:18px;bottom:84px;z-index:2147483000;border:0;border-radius:999px;padding:12px 16px;background:#0f766e;color:#fff;font:700 13px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 8px 25px rgba(0,0,0,.28);cursor:pointer;display:flex;align-items:center;gap:8px}
-      #tecoAnalyticsFab:hover{transform:translateY(-1px);background:#115e59}
+      #tecoAnalyticsReportEntry{margin:16px 0;width:100%;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+      .ta-report-entry-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px;border:1px solid #99f6e4;border-radius:14px;background:linear-gradient(135deg,#ecfdf5,#f0fdfa);box-shadow:0 6px 18px rgba(15,118,110,.10);color:#0f172a}
+      .ta-report-entry-copy{display:flex;align-items:center;gap:12px;min-width:0}.ta-report-entry-icon{display:grid;place-items:center;flex:0 0 auto;width:44px;height:44px;border-radius:12px;background:#0f766e;color:#fff;font-size:22px}.ta-report-entry-copy strong{display:block;font-size:15px}.ta-report-entry-copy small{display:block;margin-top:3px;color:#475569;line-height:1.4}
+      .ta-report-open{flex:0 0 auto;border:0;border-radius:10px;padding:10px 14px;background:#0f766e;color:#fff;font-weight:800;cursor:pointer}.ta-report-open:hover{background:#115e59}.ta-role-badge{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:999px;background:#ccfbf1;color:#115e59;font-size:10px;font-weight:800}.ta-role-badge.admin{background:#fef3c7;color:#92400e}
       #tecoAnalyticsOverlay{position:fixed;inset:0;z-index:2147483100;background:rgba(2,6,23,.72);display:none;align-items:center;justify-content:center;padding:14px;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
       #tecoAnalyticsOverlay.open{display:flex}
       #tecoAnalyticsModal{width:min(1120px,100%);height:min(92vh,900px);background:#f8fafc;color:#0f172a;border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column}
@@ -737,23 +826,320 @@
       .ta-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}.ta-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}.ta-card span{display:block;color:#64748b;font-size:11px}.ta-card strong{font-size:20px;display:block;margin-top:5px}
       .ta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.ta-panel{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}.ta-panel h3{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc}.ta-panel .ta-pad{padding:12px}
       .ta-table-wrap{overflow:auto;max-height:430px}.ta-table{width:100%;border-collapse:collapse;font-size:12px}.ta-table th{position:sticky;top:0;background:#f1f5f9;color:#334155;text-align:left;padding:9px;border-bottom:1px solid #cbd5e1;z-index:1}.ta-table td{padding:8px 9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.ta-table tr:hover td{background:#f8fafc}.ta-num{text-align:right;white-space:nowrap}.ta-muted{color:#64748b}.ta-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:10px;font-weight:700}.ta-badge.miss{background:#fee2e2;color:#991b1b}
-      .ta-map-select{width:100%;min-width:190px;border:1px solid #cbd5e1;border-radius:7px;padding:6px;background:#fff}.ta-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ta-settings .ta-field input{width:100%;box-sizing:border-box}.ta-note{font-size:12px;line-height:1.5;color:#475569;background:#fef3c7;border:1px solid #fde68a;padding:10px;border-radius:9px}.ta-recipe{margin-bottom:12px}.ta-recipe h4{margin:0 0 6px;font-size:13px}.ta-recipe ul{margin:0;padding-left:18px;color:#475569;font-size:12px}
+      .ta-map-select{width:100%;min-width:190px;border:1px solid #cbd5e1;border-radius:7px;padding:6px;background:#fff}.ta-adjust-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.ta-adjust-form .wide{grid-column:span 2}.ta-lock{font-size:12px;line-height:1.5;color:#7c2d12;background:#ffedd5;border:1px solid #fdba74;padding:10px;border-radius:9px}.ta-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ta-settings .ta-field input{width:100%;box-sizing:border-box}.ta-note{font-size:12px;line-height:1.5;color:#475569;background:#fef3c7;border:1px solid #fde68a;padding:10px;border-radius:9px}.ta-recipe{margin-bottom:12px}.ta-recipe h4{margin:0 0 6px;font-size:13px}.ta-recipe ul{margin:0;padding-left:18px;color:#475569;font-size:12px}
       .ta-toast{position:fixed;left:50%;bottom:25px;transform:translateX(-50%);z-index:2147483200;background:#0f172a;color:#fff;padding:10px 14px;border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.3);font:600 13px system-ui;opacity:0;pointer-events:none;transition:.2s}.ta-toast.show{opacity:1}
-      @media(max-width:800px){#tecoAnalyticsFab{right:12px;bottom:72px;padding:11px 13px}.ta-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ta-grid{grid-template-columns:1fr}.ta-actions{margin-left:0;width:100%}.ta-settings{grid-template-columns:1fr}.ta-toolbar{align-items:stretch}.ta-field{flex:1;min-width:130px}#tecoAnalyticsModal{height:96vh;border-radius:13px}.ta-head{padding:13px}.ta-body{padding:11px}}
+      @media(max-width:800px){.ta-adjust-form{grid-template-columns:1fr}.ta-adjust-form .wide{grid-column:auto}.ta-report-entry-card{align-items:stretch;flex-direction:column}.ta-report-open{width:100%}.ta-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ta-grid{grid-template-columns:1fr}.ta-actions{margin-left:0;width:100%}.ta-settings{grid-template-columns:1fr}.ta-toolbar{align-items:stretch}.ta-field{flex:1;min-width:130px}#tecoAnalyticsModal{height:96vh;border-radius:13px}.ta-head{padding:13px}.ta-body{padding:11px}}
     `;
     document.head.appendChild(style);
   }
 
+  function isVisible(element) {
+    if (!element || !element.isConnected) return false;
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function sessionValueLooksLoggedIn(value) {
+    if (!value) return false;
+    if (typeof value === 'string') {
+      const text = normalizeText(value);
+      return Boolean(text && !['NULL', 'UNDEFINED', 'FALSE', 'LOGOUT', 'GUEST'].includes(text));
+    }
+    if (typeof value !== 'object' || Array.isArray(value)) return false;
+    if (value.loggedIn === false || value.isLoggedIn === false || value.authenticated === false) return false;
+    return Boolean(
+      value.loggedIn === true || value.isLoggedIn === true || value.authenticated === true ||
+      value.role || value.userRole || value.username || value.name || value.nama ||
+      value.cashier || value.kasir || value.id
+    );
+  }
+
+  function roleFromValue(value) {
+    if (!value) return '';
+    let parts = [];
+    if (typeof value === 'string' || typeof value === 'number') {
+      parts = [String(value)];
+    } else if (typeof value === 'object' && !Array.isArray(value)) {
+      parts = [
+        value.role, value.userRole, value.level, value.type, value.userType,
+        value.username, value.name, value.nama, value.cashier, value.kasir, value.id
+      ].filter((item) => item != null).map(String);
+    }
+    const text = normalizeText(parts.join(' '));
+    if (/\bADMIN\b|OWNER|PEMILIK/.test(text)) return 'admin';
+    if (/\bKASIR\b|CASHIER|OPERATOR|STAFF/.test(text)) return 'cashier';
+    return '';
+  }
+
+  function nameFromValue(value) {
+    if (!value) return '';
+    if (typeof value === 'string' || typeof value === 'number') return String(value).trim();
+    if (typeof value !== 'object' || Array.isArray(value)) return '';
+    return String(
+      value.name || value.nama || value.username || value.displayName ||
+      value.cashier || value.kasir || value.id || ''
+    ).trim();
+  }
+
+  function storedSessionCandidates() {
+    const keys = [
+      'currentUser', 'loggedInUser', 'activeUser', 'sessionUser', 'userSession',
+      'teco_current_user', 'tecoCurrentUser', 'pos_current_user', 'posCurrentUser',
+      'currentCashier', 'activeCashier', 'loggedInCashier', 'authUser'
+    ];
+    const values = [];
+    for (const key of keys) {
+      try {
+        const raw = localStorage.getItem(key) || sessionStorage.getItem(key);
+        if (!raw) continue;
+        let value = raw;
+        try { value = JSON.parse(raw); } catch (_) { /* use string */ }
+        if (sessionValueLooksLoggedIn(value)) values.push(value);
+      } catch (_) { /* storage may be blocked */ }
+    }
+    return values;
+  }
+
+  function globalSessionCandidates() {
+    return [
+      window.currentUser, window.loggedInUser, window.activeUser, window.sessionUser,
+      window.currentCashier, window.activeCashier, window.authUser, window.userSession
+    ].filter(sessionValueLooksLoggedIn);
+  }
+
+  function visibleControlTextMatches(test) {
+    return Array.from(document.querySelectorAll('button,a,[role="button"]'))
+      .some((el) => isVisible(el) && test(normalizeText(el.textContent)));
+  }
+
+  function firstVisibleText(pattern) {
+    const elements = Array.from(document.querySelectorAll('button,a,span,strong,small,div,p,h1,h2,h3,h4,label'));
+    for (const el of elements) {
+      if (!isVisible(el) || el.children.length > 3) continue;
+      const raw = String(el.textContent || '').trim();
+      const normalized = normalizeText(raw);
+      pattern.lastIndex = 0;
+      if (pattern.test(normalized)) return raw;
+    }
+    return '';
+  }
+
+  function visibleExactText(pattern) {
+    return Boolean(firstVisibleText(pattern));
+  }
+
+  function getCurrentSession() {
+    const loginButtonVisible = visibleControlTextMatches((text) => text === 'MASUK' || text === 'LOGIN');
+    const loginUserSelectVisible = Array.from(document.querySelectorAll('select'))
+      .some((select) => isVisible(select) && normalizeText(select.textContent).includes('PILIH KASIR'));
+    if (loginButtonVisible && loginUserSelectVisible) {
+      return { authenticated: false, role: 'guest', name: '' };
+    }
+
+    const candidates = globalSessionCandidates().concat(storedSessionCandidates());
+    let authenticated = candidates.length > 0;
+    let role = '';
+    let name = '';
+
+    for (const value of candidates) {
+      if (!role) role = roleFromValue(value);
+      if (!name) name = nameFromValue(value);
+    }
+
+    const hasVisibleLogout = visibleControlTextMatches((text) => text === 'KELUAR' || text === 'LOGOUT');
+    const visibleTexts = Array.from(document.querySelectorAll('button,a,[role="button"]'))
+      .filter(isVisible)
+      .map((el) => normalizeText(el.textContent));
+    const hasAppNavigation = visibleTexts.includes('LAPORAN') &&
+      (visibleTexts.includes('TRANSAKSI') || visibleTexts.includes('KASIR'));
+    authenticated = authenticated || hasVisibleLogout || hasAppNavigation;
+
+    if (!authenticated) return { authenticated: false, role: 'guest', name: '' };
+
+    // Panel Admin hanya terlihat pada sesi admin di aplikasi utama.
+    const adminPanelVisible = visibleExactText(/^(PANEL ADMIN|ADMIN)$/) ||
+      visibleControlTextMatches((text) => text === 'PANEL ADMIN');
+    if (adminPanelVisible) role = 'admin';
+
+    if (!role) {
+      if (visibleExactText(/^KASIR\s*[1-9][0-9]*$/)) role = 'cashier';
+      else role = 'cashier';
+    }
+
+    if (!name) {
+      const exactVisibleName = role === 'admin'
+        ? firstVisibleText(/^ADMIN$/)
+        : firstVisibleText(/^KASIR\s*[1-9][0-9]*$/);
+      const userLabels = Array.from(document.querySelectorAll('[data-user],[data-cashier],[id*="currentUser"],[id*="currentCashier"],[id*="userName"],[id*="cashierName"],.current-user,.current-cashier,.user-name,.cashier-name'))
+        .filter(isVisible)
+        .map((el) => String(el.textContent || '').trim())
+        .filter(Boolean);
+      name = exactVisibleName || userLabels[0] || (role === 'admin' ? 'Admin' : 'Kasir');
+    }
+
+    if (role === 'admin') name = name || 'Admin';
+    return { authenticated: true, role, name };
+  }
+
+  function isAuthenticated() {
+    return getCurrentSession().authenticated;
+  }
+
+  function isAdmin() {
+    return getCurrentSession().role === 'admin';
+  }
+
+  function currentCashierName() {
+    const session = getCurrentSession();
+    if (session.role !== 'cashier') return '';
+    const normalized = normalizeText(session.name);
+    const known = getCashiers().find((name) => normalizeText(name) === normalized);
+    if (known) return known;
+    const match = normalized.match(/KASIR\s*([0-9]+)/);
+    if (match) {
+      const byNumber = getCashiers().find((name) => normalizeText(name) === `KASIR ${match[1]}`);
+      return byNumber || `Kasir ${match[1]}`;
+    }
+    return session.name && !/^KASIR$/i.test(session.name) ? session.name : '';
+  }
+
+  function elementText(element) {
+    return normalizeText(element && element.textContent);
+  }
+
+  function scoreReportContainer(element) {
+    if (!element || element === document.body || element === document.documentElement) return -1;
+    const text = elementText(element);
+    let score = 0;
+    if (text.includes('LAPORAN ANALISIS')) score += 5;
+    if (text.includes('GRAFIK PENJUALAN')) score += 3;
+    if (text.includes('RINGKASAN')) score += 2;
+    if (text.includes('KIRIM LAPORAN KE OWNER')) score += 2;
+    if (text.includes('CATATAN STOK')) score += 1;
+    if (element.matches('[data-page],[data-tab-content],section,main,.page,.tab-content,.content-section')) score += 1;
+    return score;
+  }
+
+  function findReportHost() {
+    const selectors = [
+      '#reportsPage', '#reportPage', '#laporanPage', '#reports-page', '#report-page',
+      '#laporan-page', '#reports', '#laporan', '[data-page="reports"]', '[data-page="report"]',
+      '[data-page="laporan"]', '.reports-page', '.report-page', '.laporan-page'
+    ];
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element) return element;
+    }
+
+    const anchors = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,button,a,div,section'))
+      .filter((el) => {
+        const text = elementText(el);
+        return text === 'LAPORAN ANALISIS' || text === 'LAPORAN & ANALISIS' ||
+          text === 'KIRIM LAPORAN KE OWNER' || text === 'GRAFIK PENJUALAN';
+      });
+
+    let best = null;
+    let bestScore = -1;
+    let bestSize = Number.POSITIVE_INFINITY;
+    anchors.forEach((anchor) => {
+      let node = anchor;
+      for (let depth = 0; node && depth < 9; depth += 1, node = node.parentElement) {
+        const score = scoreReportContainer(node);
+        const size = node.querySelectorAll ? node.querySelectorAll('*').length : 999999;
+        if (score > bestScore || (score === bestScore && size < bestSize)) {
+          best = node;
+          bestScore = score;
+          bestSize = size;
+        }
+      }
+    });
+    return bestScore >= 5 ? best : null;
+  }
+
+  function createReportEntry() {
+    const entry = document.createElement('section');
+    entry.id = 'tecoAnalyticsReportEntry';
+    entry.setAttribute('aria-label', 'Analisis penjualan dan bahan');
+    entry.innerHTML = `
+      <div class="ta-report-entry-card">
+        <div class="ta-report-entry-copy">
+          <span class="ta-report-entry-icon" aria-hidden="true">📊</span>
+          <span><strong>Analisis Penjualan & Bahan</strong><small class="ta-report-entry-desc"></small><span class="ta-role-badge"></span></span>
+        </div>
+        <button class="ta-report-open" type="button">Buka Analisis</button>
+      </div>`;
+    entry.querySelector('.ta-report-open').addEventListener('click', () => openModal('daily'));
+    updateReportEntry(entry);
+    return entry;
+  }
+
+  function updateReportEntry(entry) {
+    if (!entry) return;
+    const session = getCurrentSession();
+    const admin = session.role === 'admin';
+    const desc = entry.querySelector('.ta-report-entry-desc');
+    const badge = entry.querySelector('.ta-role-badge');
+    if (desc) desc.textContent = admin
+      ? 'Rekap cup/varian, analisis bahan, penyesuaian laporan, mapping resep, dan pengaturan.'
+      : 'Rekap cup/varian, analisis bahan, ekspor laporan, dan penyesuaian laporan kasir.';
+    if (badge) {
+      badge.textContent = admin ? 'Akses Admin — pengaturan dapat diedit' : 'Akses Kasir — hanya penyesuaian laporan';
+      badge.classList.toggle('admin', admin);
+    }
+  }
+
+  function mountReportEntry() {
+    if (!isAuthenticated()) return false;
+    const host = findReportHost();
+    if (!host) return false;
+    let entry = document.getElementById('tecoAnalyticsReportEntry');
+    if (!entry) entry = createReportEntry();
+    if (entry.parentElement !== host) host.appendChild(entry);
+    updateReportEntry(entry);
+    return true;
+  }
+
+  function destroyProtectedUi() {
+    const entry = document.getElementById('tecoAnalyticsReportEntry');
+    if (entry) entry.remove();
+    const overlay = document.getElementById('tecoAnalyticsOverlay');
+    if (overlay) overlay.remove();
+    const toastElement = document.getElementById('tecoAnalyticsToast');
+    if (toastElement) toastElement.remove();
+  }
+
+  function syncAccessAndPlacement() {
+    state.session = getCurrentSession();
+    if (!state.session.authenticated) {
+      destroyProtectedUi();
+      return;
+    }
+    mountReportEntry();
+  }
+
+  function startAccessMonitor() {
+    let queued = false;
+    const schedule = () => {
+      if (queued) return;
+      queued = true;
+      setTimeout(() => {
+        queued = false;
+        syncAccessAndPlacement();
+      }, 80);
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
+    document.addEventListener('click', schedule, true);
+    window.addEventListener('storage', schedule);
+    setInterval(syncAccessAndPlacement, 1200);
+    syncAccessAndPlacement();
+  }
+
   function createUi() {
     injectStyles();
-    if (!document.getElementById('tecoAnalyticsFab')) {
-      const fab = document.createElement('button');
-      fab.id = 'tecoAnalyticsFab';
-      fab.type = 'button';
-      fab.innerHTML = '<span>📊</span><span>Analisis Penjualan</span>';
-      fab.addEventListener('click', openModal);
-      document.body.appendChild(fab);
-    }
+    if (!isAuthenticated()) return false;
 
     if (!document.getElementById('tecoAnalyticsOverlay')) {
       const overlay = document.createElement('div');
@@ -768,9 +1154,10 @@
             <div class="ta-tabs">
               <button class="ta-tab active" data-tab="daily" type="button">Harian</button>
               <button class="ta-tab" data-tab="monthly" type="button">Bulanan</button>
-              <button class="ta-tab" data-tab="mapping" type="button">Mapping Resep</button>
-              <button class="ta-tab" data-tab="recipes" type="button">Daftar Resep</button>
-              <button class="ta-tab" data-tab="settings" type="button">Pengaturan</button>
+              <button class="ta-tab" data-tab="adjustments" type="button">Penyesuaian Laporan</button>
+              <button class="ta-tab ta-admin-only" data-tab="mapping" type="button">Mapping Resep</button>
+              <button class="ta-tab ta-admin-only" data-tab="recipes" type="button">Daftar Resep</button>
+              <button class="ta-tab ta-admin-only" data-tab="settings" type="button">Pengaturan</button>
             </div>
             <label class="ta-field ta-date-field"><span>Tanggal</span><input id="taDailyDate" type="date"></label>
             <label class="ta-field ta-month-field" style="display:none"><span>Bulan</span><input id="taMonthlyMonth" type="month"></label>
@@ -796,10 +1183,14 @@
       overlay.querySelector('[data-teco-action="excel"]').addEventListener('click', () => exportExcel(state.activeTab === 'monthly' ? 'monthly' : 'daily'));
       overlay.querySelector('[data-teco-action="excelBoth"]').addEventListener('click', () => exportExcel('both'));
     }
+    return true;
   }
 
   function openModal(tab) {
-    createUi();
+    if (!isAuthenticated() || !createUi()) {
+      console.warn('[TeCo Analytics] Akses ditolak: pengguna belum login.');
+      return;
+    }
     if (tab) state.activeTab = tab;
     document.getElementById('tecoAnalyticsOverlay').classList.add('open');
     syncControls();
@@ -813,7 +1204,13 @@
   }
 
   function setTab(tab) {
-    state.activeTab = tab;
+    const adminOnly = ['mapping', 'recipes', 'settings'];
+    if (adminOnly.includes(tab) && !isAdmin()) {
+      state.activeTab = 'adjustments';
+      toast('Akun kasir hanya dapat menyesuaikan data laporan');
+    } else {
+      state.activeTab = tab;
+    }
     syncControls();
     renderAll();
   }
@@ -821,18 +1218,34 @@
   function syncControls() {
     const overlay = document.getElementById('tecoAnalyticsOverlay');
     if (!overlay) return;
+    const session = getCurrentSession();
+    const admin = session.role === 'admin';
+    if (!admin && ['mapping', 'recipes', 'settings'].includes(state.activeTab)) state.activeTab = 'daily';
+
+    overlay.querySelectorAll('.ta-admin-only').forEach((element) => { element.style.display = admin ? '' : 'none'; });
     overlay.querySelectorAll('.ta-tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === state.activeTab));
     overlay.querySelector('#taDailyDate').value = state.dailyDate;
     overlay.querySelector('#taMonthlyMonth').value = state.monthlyMonth;
-    overlay.querySelector('.ta-date-field').style.display = state.activeTab === 'daily' ? '' : 'none';
+    overlay.querySelector('.ta-date-field').style.display = ['daily', 'adjustments'].includes(state.activeTab) ? '' : 'none';
     overlay.querySelector('.ta-month-field').style.display = state.activeTab === 'monthly' ? '' : 'none';
-    overlay.querySelector('.ta-cashier-field').style.display = ['daily', 'monthly', 'mapping'].includes(state.activeTab) ? '' : 'none';
+    overlay.querySelector('.ta-cashier-field').style.display = ['daily', 'monthly', 'adjustments', 'mapping'].includes(state.activeTab) ? '' : 'none';
     const actions = overlay.querySelector('.ta-actions');
     actions.style.display = ['daily', 'monthly'].includes(state.activeTab) ? 'flex' : 'none';
     const select = overlay.querySelector('#taCashier');
-    const options = ['<option value="ALL">Semua Kasir</option>'].concat(getCashiers().map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
-    select.innerHTML = options.join('');
-    select.value = state.cashier;
+    const cashiers = getCashiers();
+    if (admin) {
+      const options = ['<option value="ALL">Semua Kasir</option>'].concat(cashiers.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
+      select.innerHTML = options.join('');
+      if (state.cashier !== 'ALL' && !cashiers.includes(state.cashier)) state.cashier = 'ALL';
+      select.value = state.cashier;
+      select.disabled = false;
+    } else {
+      const ownName = currentCashierName() || state.cashier || 'Kasir';
+      state.cashier = ownName;
+      select.innerHTML = `<option value="${escapeHtml(ownName)}">${escapeHtml(ownName)}</option>`;
+      select.value = ownName;
+      select.disabled = true;
+    }
   }
 
   function renderStatus(message, isError) {
@@ -850,9 +1263,14 @@
       return;
     }
     if (state.activeTab === 'daily' || state.activeTab === 'monthly') renderReport(state.activeTab);
-    else if (state.activeTab === 'mapping') renderMapping();
-    else if (state.activeTab === 'recipes') renderRecipes();
-    else renderSettings();
+    else if (state.activeTab === 'adjustments') renderAdjustments();
+    else if (state.activeTab === 'mapping' && isAdmin()) renderMapping();
+    else if (state.activeTab === 'recipes' && isAdmin()) renderRecipes();
+    else if (state.activeTab === 'settings' && isAdmin()) renderSettings();
+    else {
+      state.activeTab = 'daily';
+      renderReport('daily');
+    }
   }
 
   function renderReport(mode) {
@@ -882,8 +1300,9 @@
         <div class="ta-card"><span>Total cup</span><strong>${formatDecimal(report.totalCups)}</strong></div>
         <div class="ta-card"><span>Varian berbeda</span><strong>${report.distinctVariants}</strong></div>
         <div class="ta-card"><span>Omzet</span><strong style="font-size:16px">${formatRupiah(report.totalRevenue)}</strong></div>
-        <div class="ta-card"><span>Belum terpetakan</span><strong>${report.unmatched.length}</strong></div>
+        <div class="ta-card"><span>Penyesuaian</span><strong>${report.adjustmentCount}</strong></div>
       </div>
+      ${report.adjustmentCount ? `<div class="ta-status" style="margin-bottom:12px">Laporan ini memuat <strong>${report.adjustmentCount}</strong> penyesuaian manual. Transaksi asli tidak diubah.</div>` : ''}
       ${report.concentrateUsageMl > 0 ? `<div class="ta-note" style="margin-bottom:12px"><strong>Kebutuhan konsentrat:</strong> ${escapeHtml(formatMeasurement(report.concentrateUsageMl, 'ml'))} atau sekitar ${formatDecimal(report.concentrateBatches)} batch, dengan asumsi hasil satu batch ${formatDecimal(state.settings.concentrateBatchYieldMl)} ml.</div>` : ''}
       <div class="ta-grid">
         <section class="ta-panel"><h3>Rekap Varian Terjual</h3><div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>No.</th><th>Varian</th><th class="ta-num">Cup</th><th class="ta-num">Omzet Item</th></tr></thead><tbody>${variantRows || '<tr><td colspan="4" class="ta-muted">Belum ada transaksi pada periode ini.</td></tr>'}</tbody></table></div></section>
@@ -904,7 +1323,104 @@
     return ['<option value="">— Belum dipetakan —</option>'].concat(RECIPE_NAMES.map((name) => `<option value="${escapeHtml(name)}"${name === selected ? ' selected' : ''}>${escapeHtml(name)}</option>`)).join('');
   }
 
+  async function syncAdjustmentToCloud(row, remove) {
+    const dbUrl = String(state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
+    const id = encodeURIComponent(String(row.id));
+    const response = await fetch(`${dbUrl}/analyticsAdjustments/${id}.json`, {
+      method: remove ? 'DELETE' : 'PUT',
+      headers: remove ? undefined : { 'Content-Type': 'application/json' },
+      body: remove ? undefined : JSON.stringify(row)
+    });
+    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+  }
+
+  function adjustmentId() {
+    return `adj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function canManageAdjustment(row) {
+    if (isAdmin()) return true;
+    const own = currentCashierName();
+    return Boolean(own && normalizeText(row.cashier) === normalizeText(own));
+  }
+
+  function renderAdjustments(editId) {
+    const content = document.getElementById('taContent');
+    const session = getCurrentSession();
+    const admin = session.role === 'admin';
+    const ownName = currentCashierName();
+    const editing = editId ? state.adjustments.find((row) => row.id === editId && canManageAdjustment(row)) : null;
+    const selectedDate = editing ? editing.date : state.dailyDate;
+    const selectedCashier = editing ? editing.cashier : (admin ? (state.cashier === 'ALL' ? '' : state.cashier) : ownName);
+    const variantNames = Array.from(new Set(allKnownVariants().map((row) => row.name))).sort((a, b) => a.localeCompare(b));
+    const visibleRows = state.adjustments
+      .filter((row) => admin || normalizeText(row.cashier) === normalizeText(ownName))
+      .filter((row) => !admin || state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier))
+      .filter((row) => !state.dailyDate || row.date === state.dailyDate)
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    const cashierOptions = getCashiers().map((name) => `<option value="${escapeHtml(name)}"${normalizeText(name) === normalizeText(selectedCashier) ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
+
+    content.innerHTML = `
+      <div class="ta-status">Penyesuaian hanya mengoreksi hasil laporan dan analisis bahan; transaksi asli tetap tersimpan tanpa perubahan. Nilai positif menambah, nilai negatif mengurangi.</div>
+      ${admin ? '<div class="ta-note" style="margin-bottom:12px"><strong>Admin:</strong> dapat membuat, mengedit, dan menghapus penyesuaian semua kasir.</div>' : '<div class="ta-lock" style="margin-bottom:12px"><strong>Akun kasir:</strong> hanya dapat mengelola penyesuaian laporan milik akun sendiri. Mapping resep dan pengaturan analisis dikunci.</div>'}
+      <section class="ta-panel" style="margin-bottom:14px"><h3>${editing ? 'Edit' : 'Tambah'} Penyesuaian Laporan</h3><div class="ta-pad">
+        <div class="ta-adjust-form">
+          <label class="ta-field"><span>Tanggal</span><input id="taAdjDate" type="date" value="${escapeHtml(selectedDate)}"></label>
+          <label class="ta-field"><span>Kasir</span><select id="taAdjCashier"${admin ? '' : ' disabled'}>${admin ? `<option value="">Pilih kasir</option>${cashierOptions}` : `<option value="${escapeHtml(ownName)}">${escapeHtml(ownName || 'Kasir')}</option>`}</select></label>
+          <label class="ta-field"><span>Varian</span><input id="taAdjVariant" list="taVariantList" placeholder="Nama varian" value="${escapeHtml(editing ? editing.variant : '')}"><datalist id="taVariantList">${variantNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist></label>
+          <label class="ta-field"><span>Koreksi Cup (+/-)</span><input id="taAdjQty" type="number" step="1" value="${escapeHtml(editing ? editing.qtyDelta : 0)}"></label>
+          <label class="ta-field"><span>Koreksi Omzet (+/- Rp)</span><input id="taAdjRevenue" type="number" step="1" value="${escapeHtml(editing ? editing.revenueDelta : 0)}"></label>
+          <label class="ta-field wide"><span>Catatan/alasan</span><input id="taAdjNote" type="text" maxlength="200" placeholder="Contoh: salah input 1 cup" value="${escapeHtml(editing ? editing.note : '')}"></label>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button id="taSaveAdjustment" class="ta-btn primary" type="button">${editing ? 'Simpan Perubahan' : '+ Tambah Penyesuaian'}</button>${editing ? '<button id="taCancelAdjustment" class="ta-btn" type="button">Batal Edit</button>' : ''}</div>
+      </div></section>
+      <section class="ta-panel"><h3>Riwayat Penyesuaian — ${escapeHtml(longDate(state.dailyDate))}</h3><div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>Tanggal</th><th>Kasir</th><th>Varian</th><th class="ta-num">Cup</th><th class="ta-num">Omzet</th><th>Catatan</th><th>Aksi</th></tr></thead><tbody>
+        ${visibleRows.map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.cashier)}</td><td>${escapeHtml(row.variant)}</td><td class="ta-num">${row.qtyDelta > 0 ? '+' : ''}${formatDecimal(row.qtyDelta)}</td><td class="ta-num">${row.revenueDelta > 0 ? '+' : ''}${formatRupiah(row.revenueDelta)}</td><td>${escapeHtml(row.note || '-')}<br><span class="ta-muted">oleh ${escapeHtml(row.createdBy || '-')}</span></td><td>${canManageAdjustment(row) ? `<button class="ta-btn" data-adj-edit="${escapeHtml(row.id)}" type="button">Edit</button> <button class="ta-btn warn" data-adj-delete="${escapeHtml(row.id)}" type="button">Hapus</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="7" class="ta-muted">Belum ada penyesuaian pada tanggal ini.</td></tr>'}
+      </tbody></table></div></section>`;
+
+    content.querySelector('#taSaveAdjustment').addEventListener('click', () => {
+      const date = content.querySelector('#taAdjDate').value;
+      const cashier = admin ? content.querySelector('#taAdjCashier').value : ownName;
+      const variant = content.querySelector('#taAdjVariant').value.trim();
+      const qtyDelta = toNumber(content.querySelector('#taAdjQty').value);
+      const revenueDelta = toNumber(content.querySelector('#taAdjRevenue').value);
+      const note = content.querySelector('#taAdjNote').value.trim();
+      if (!date || !cashier || !variant) { toast('Tanggal, kasir, dan varian wajib diisi'); return; }
+      if (!qtyDelta && !revenueDelta) { toast('Isi koreksi cup atau omzet'); return; }
+      if (editing) {
+        Object.assign(editing, { date, cashier, variant, qtyDelta, revenueDelta, note, updatedAt: new Date().toISOString(), updatedBy: session.name });
+      } else {
+        state.adjustments.push({ id: adjustmentId(), date, cashier, variant, qtyDelta, revenueDelta, note, createdAt: new Date().toISOString(), createdBy: session.name || cashier });
+      }
+      saveAdjustments();
+      const savedRow = editing || state.adjustments[state.adjustments.length - 1];
+      syncAdjustmentToCloud(savedRow, false).catch((err) => {
+        console.warn('[TeCo Analytics] Penyesuaian tersimpan lokal, sinkron cloud gagal:', err);
+        toast('Tersimpan di perangkat; sinkron cloud gagal');
+      });
+      state.dailyDate = date;
+      toast(editing ? 'Penyesuaian diperbarui' : 'Penyesuaian ditambahkan');
+      renderAdjustments();
+    });
+    const cancel = content.querySelector('#taCancelAdjustment');
+    if (cancel) cancel.addEventListener('click', () => renderAdjustments());
+    content.querySelectorAll('[data-adj-edit]').forEach((button) => button.addEventListener('click', () => renderAdjustments(button.dataset.adjEdit)));
+    content.querySelectorAll('[data-adj-delete]').forEach((button) => button.addEventListener('click', () => {
+      const row = state.adjustments.find((item) => item.id === button.dataset.adjDelete);
+      if (!row || !canManageAdjustment(row)) return;
+      state.adjustments = state.adjustments.filter((item) => item.id !== row.id);
+      saveAdjustments();
+      syncAdjustmentToCloud(row, true).catch((err) => {
+        console.warn('[TeCo Analytics] Penyesuaian terhapus lokal, sinkron cloud gagal:', err);
+        toast('Terhapus di perangkat; sinkron cloud gagal');
+      });
+      toast('Penyesuaian dihapus');
+      renderAdjustments();
+    }));
+  }
+
   function renderMapping() {
+    if (!isAdmin()) { setTab('adjustments'); return; }
     const content = document.getElementById('taContent');
     const rows = allKnownVariants();
     content.innerHTML = `
@@ -924,6 +1440,7 @@
   }
 
   function renderRecipes() {
+    if (!isAdmin()) { setTab('adjustments'); return; }
     const content = document.getElementById('taContent');
     const html = Object.entries(RECIPES).map(([name, items]) => `
       <div class="ta-recipe"><h4>${escapeHtml(name)}</h4><ul>${items.map((item) => `<li>${escapeHtml(item.material)} — ${escapeHtml(formatMeasurement(item.qty, item.unit))}</li>`).join('')}</ul></div>`).join('');
@@ -933,6 +1450,7 @@
   }
 
   function renderSettings() {
+    if (!isAdmin()) { setTab('adjustments'); return; }
     const content = document.getElementById('taContent');
     content.innerHTML = `
       <div class="ta-settings">
@@ -976,6 +1494,7 @@
     lines.push(`Total cup terjual: *${formatDecimal(report.totalCups)} cup*`);
     lines.push(`Jumlah varian: *${report.distinctVariants}*`);
     lines.push(`Omzet: *${formatRupiah(report.totalRevenue)}*`);
+    if (report.adjustmentCount) lines.push(`Penyesuaian manual: *${report.adjustmentCount}*`);
     lines.push('');
     lines.push('*REKAP VARIAN TERJUAL*');
     if (!report.variants.length) lines.push('- Belum ada transaksi');
@@ -1003,6 +1522,10 @@
   }
 
   async function sendWhatsApp(mode) {
+    if (!isAuthenticated()) {
+      console.warn('[TeCo Analytics] WhatsApp tidak dibuka karena pengguna belum login.');
+      return;
+    }
     if (!state.lastLoadedAt) await loadTransactions();
     const message = buildWhatsAppMessage(mode);
     const phone = normalizePhone(state.settings.ownerWhatsApp);
@@ -1044,7 +1567,8 @@
       { Keterangan: 'Konsentrat Terpakai (ml)', Nilai: report.concentrateUsageMl },
       { Keterangan: 'Perkiraan Batch Konsentrat', Nilai: report.concentrateBatches },
       { Keterangan: 'Asumsi Hasil 1 Batch (ml)', Nilai: state.settings.concentrateBatchYieldMl },
-      { Keterangan: 'Varian Belum Terpetakan', Nilai: report.unmatched.length }
+      { Keterangan: 'Varian Belum Terpetakan', Nilai: report.unmatched.length },
+      { Keterangan: 'Jumlah Penyesuaian Manual', Nilai: report.adjustmentCount }
     ];
   }
 
@@ -1080,6 +1604,22 @@
       });
     }
     return rows;
+  }
+
+  function adjustmentExportRows(report) {
+    return report.adjustments.map((row, index) => ({
+      No: index + 1,
+      Tanggal: row.date,
+      Kasir: row.cashier,
+      Varian: row.variant,
+      Koreksi_Cup: row.qtyDelta,
+      Koreksi_Omzet: row.revenueDelta,
+      Catatan: row.note || '',
+      Dibuat_Oleh: row.createdBy || '',
+      Dibuat_Pada: row.createdAt || '',
+      Diubah_Oleh: row.updatedBy || '',
+      Diubah_Pada: row.updatedAt || ''
+    }));
   }
 
   function recipeExportRows() {
@@ -1123,6 +1663,10 @@
   }
 
   async function exportExcel(mode) {
+    if (!isAuthenticated()) {
+      console.warn('[TeCo Analytics] Ekspor dibatalkan karena pengguna belum login.');
+      return;
+    }
     try {
       if (!state.lastLoadedAt) await loadTransactions();
       const XLSX = await ensureXlsx();
@@ -1133,6 +1677,7 @@
         addSheet(XLSX, workbook, 'Varian Harian', variantExportRows(daily));
         addSheet(XLSX, workbook, 'Bahan Harian', materialExportRows(daily));
         addSheet(XLSX, workbook, 'Transaksi Harian', transactionRows(daily));
+        addSheet(XLSX, workbook, 'Penyesuaian Harian', adjustmentExportRows(daily));
       }
       if (mode === 'monthly' || mode === 'both') {
         const monthly = aggregate('monthly');
@@ -1140,9 +1685,12 @@
         addSheet(XLSX, workbook, 'Varian Bulanan', variantExportRows(monthly));
         addSheet(XLSX, workbook, 'Bahan Bulanan', materialExportRows(monthly));
         addSheet(XLSX, workbook, 'Transaksi Bulanan', transactionRows(monthly));
+        addSheet(XLSX, workbook, 'Penyesuaian Bulanan', adjustmentExportRows(monthly));
       }
-      addSheet(XLSX, workbook, 'Mapping Produk', mappingExportRows());
-      addSheet(XLSX, workbook, 'Master Resep', recipeExportRows());
+      if (isAdmin()) {
+        addSheet(XLSX, workbook, 'Mapping Produk', mappingExportRows());
+        addSheet(XLSX, workbook, 'Master Resep', recipeExportRows());
+      }
       const period = mode === 'daily' ? state.dailyDate : (mode === 'monthly' ? state.monthlyMonth : `${state.dailyDate}_${state.monthlyMonth}`);
       XLSX.writeFile(workbook, `Laporan_TeCo_${mode}_${period}.xlsx`);
       toast('File Excel berhasil dibuat');
@@ -1169,7 +1717,8 @@
   function hookExistingButtons() {
     document.addEventListener('click', (event) => {
       const target = event.target && event.target.closest ? event.target.closest('button,a') : null;
-      if (!target || target.closest('#tecoAnalyticsOverlay') || target.id === 'tecoAnalyticsFab') return;
+      if (!target || target.closest('#tecoAnalyticsOverlay') || target.closest('#tecoAnalyticsReportEntry')) return;
+      if (!isAuthenticated()) return;
       const text = normalizeText(target.textContent);
       if (!text) return;
       if (text === 'EXPORT EXCEL') {
@@ -1189,7 +1738,8 @@
   }
 
   function exposeApi() {
-    window.TeCoAnalytics = {
+    const protectedReport = (mode) => isAuthenticated() ? aggregate(mode) : null;
+    const api = {
       version: VERSION,
       open: openModal,
       reload: loadTransactions,
@@ -1198,19 +1748,25 @@
       exportBoth: () => exportExcel('both'),
       sendDailyWhatsApp: () => sendWhatsApp('daily'),
       sendMonthlyWhatsApp: () => sendWhatsApp('monthly'),
-      getDailyReport: () => aggregate('daily'),
-      getMonthlyReport: () => aggregate('monthly'),
-      recipes: RECIPES
+      getDailyReport: () => protectedReport('daily'),
+      getMonthlyReport: () => protectedReport('monthly'),
+      getCurrentRole: () => getCurrentSession().role,
+      getAdjustments: () => isAuthenticated() ? state.adjustments.slice() : null,
+      getRecipes: () => isAuthenticated() ? RECIPES : null
     };
+    Object.defineProperty(api, 'recipes', {
+      enumerable: true,
+      get: () => isAuthenticated() ? RECIPES : null
+    });
+    window.TeCoAnalytics = api;
   }
 
   function init() {
-    createUi();
+    injectStyles();
     hookExistingButtons();
     exposeApi();
-    setTimeout(loadTransactions, 600);
-    if (window.TECO_ANALYTICS_AUTO_OPEN) setTimeout(() => openModal('daily'), 900);
-    console.info(`[TeCo Analytics] Add-on v${VERSION} aktif.`);
+    startAccessMonitor();
+    console.info(`[TeCo Analytics] Add-on v${VERSION} aktif di tab Laporan setelah login.`);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
