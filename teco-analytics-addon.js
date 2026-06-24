@@ -1,10 +1,10 @@
 /*
- * Te.Co Pandawa POS — Analytics Add-on v1.2.1
+ * Te.Co Pandawa POS — Analytics Add-on v1.2.2
  * Adds daily/monthly variant recap, WhatsApp report, Excel sheets,
  * and ingredient usage analysis based on the uploaded recipe workbook.
  *
  * Install: add before </body> in the existing index.html:
- * <script src="./teco-analytics-addon.js?v=1.2.1"></script>
+ * <script src="./teco-analytics-addon.js?v=1.2.2"></script>
  */
 (function () {
   'use strict';
@@ -12,7 +12,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
@@ -165,8 +165,15 @@
     monthlyMonth: jakartaMonthKey(new Date()),
     cashier: 'ALL',
     loading: false,
-    lastLoadedAt: null
+    reloadQueued: false,
+    lastLoadedAt: null,
+    lastSyncReason: ''
   };
+
+  let dataReloadTimer = null;
+  let storageHooksInstalled = false;
+  let firebaseRealtimeInstalled = false;
+  let firebaseRealtimeHandlers = [];
 
   function loadSettings() {
     try {
@@ -235,6 +242,24 @@
       .toUpperCase();
   }
 
+  function cashierKey(value) {
+    return normalizeText(value)
+      .replace(/^CASHIER/, 'KASIR')
+      .replace(/\s+/g, '');
+  }
+
+  function sameCashier(a, b) {
+    if (!a || !b) return false;
+    return cashierKey(a) === cashierKey(b);
+  }
+
+  function parseMaybeJson(value) {
+    if (typeof value !== 'string') return value;
+    const text = value.trim();
+    if (!text || !/^[\[{]/.test(text)) return value;
+    try { return JSON.parse(text); } catch (_) { return value; }
+  }
+
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -290,9 +315,14 @@
         const d = new Date(text.length === 10 ? num * 1000 : num);
         if (!Number.isNaN(d.getTime())) return d;
       }
-      let m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+      let m = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T,]+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?)?/);
       if (m) {
         const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
+        if (!Number.isNaN(d.getTime())) return d;
+      }
+      m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T,]+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?)?/);
+      if (m) {
+        const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0));
         if (!Number.isNaN(d.getTime())) return d;
       }
       const d = new Date(text);
@@ -365,33 +395,35 @@
   }
 
   const DATE_KEYS = ['date', 'tanggal', 'createdAt', 'created_at', 'timestamp', 'time', 'datetime', 'waktu', 'paidAt', 'checkoutAt', 'created', 'expenseDate', 'expense_date', 'transactionDate', 'tanggalPengeluaran'];
-  const ITEM_KEYS = ['items', 'cart', 'products', 'details', 'detail', 'orderItems', 'order_items', 'menu', 'pesanan', 'itemList', 'lineItems'];
-  const NAME_KEYS = ['name', 'productName', 'product_name', 'itemName', 'item_name', 'menuName', 'title', 'product', 'item', 'nama', 'variantName'];
-  const QTY_KEYS = ['qty', 'quantity', 'jumlah', 'count', 'cup', 'cups', 'amountQty'];
-  const PRICE_KEYS = ['price', 'harga', 'unitPrice', 'unit_price'];
-  const SUBTOTAL_KEYS = ['subtotal', 'lineTotal', 'line_total', 'totalPrice', 'total_price', 'amount'];
-  const TOTAL_KEYS = ['total', 'grandTotal', 'grand_total', 'totalAmount', 'total_amount', 'amount', 'omzet', 'subtotal'];
-  const CASHIER_KEYS = ['cashier', 'cashierName', 'cashier_name', 'kasir', 'user', 'operator', 'createdBy', 'created_by', 'staff'];
-  const PAYMENT_KEYS = ['paymentMethod', 'payment_method', 'payment', 'method', 'metode', 'paymentType', 'payment_type'];
-  const ID_KEYS = ['id', 'transactionId', 'transaction_id', 'orderId', 'order_id', 'invoice', 'receiptNo', 'receipt_no'];
+  const ITEM_KEYS = ['items', 'cart', 'products', 'details', 'detail', 'orderItems', 'order_items', 'menu', 'pesanan', 'itemList', 'lineItems', 'cartItems', 'cart_items', 'transactionItems', 'transaction_items', 'saleItems', 'sale_items', 'orderDetails', 'order_details', 'produk', 'daftarProduk'];
+  const NAME_KEYS = ['name', 'productName', 'product_name', 'itemName', 'item_name', 'menuName', 'title', 'label', 'product', 'item', 'menu', 'nama', 'namaProduk', 'nama_produk', 'variantName'];
+  const QTY_KEYS = ['qty', 'quantity', 'jumlah', 'count', 'cup', 'cups', 'amountQty', 'jumlahCup', 'jumlah_cup', 'totalQty'];
+  const PRICE_KEYS = ['price', 'harga', 'unitPrice', 'unit_price', 'sellingPrice', 'selling_price', 'hargaSatuan'];
+  const SUBTOTAL_KEYS = ['subtotal', 'lineTotal', 'line_total', 'totalPrice', 'total_price', 'amount', 'itemTotal', 'item_total', 'jumlahHarga'];
+  const TOTAL_KEYS = ['total', 'grandTotal', 'grand_total', 'totalAmount', 'total_amount', 'amount', 'omzet', 'subtotal', 'finalTotal', 'final_total', 'netTotal', 'totalBayar'];
+  const CASHIER_KEYS = ['cashier', 'cashierName', 'cashier_name', 'cashierId', 'cashier_id', 'kasir', 'namaKasir', 'nama_kasir', 'user', 'operator', 'createdBy', 'created_by', 'staff', 'username'];
+  const PAYMENT_KEYS = ['paymentMethod', 'payment_method', 'payment', 'method', 'metode', 'paymentType', 'payment_type', 'tipePembayaran', 'tipe_pembayaran', 'jenisPembayaran'];
+  const ID_KEYS = ['id', 'transactionId', 'transaction_id', 'orderId', 'order_id', 'invoice', 'receiptNo', 'receipt_no', 'invoiceNo', 'invoice_no', 'kodeTransaksi'];
   const VARIANT_KEYS = ['variant', 'variantName', 'variant_name', 'flavor', 'rasa', 'option', 'size', 'ukuran', 'modifier'];
   const NOTE_KEYS = ['note', 'notes', 'catatan', 'remark', 'remarks', 'description', 'keterangan', 'memo', 'customerNote', 'orderNote', 'transactionNote', 'noteText'];
   const EXPENSE_AMOUNT_KEYS = ['amount', 'nominal', 'value', 'total', 'expenseAmount', 'expense_amount', 'jumlah', 'biaya', 'expense', 'cost'];
   const EXPENSE_CATEGORY_KEYS = ['category', 'kategori', 'type', 'jenis', 'expenseType', 'expense_type'];
 
   function objectValuesAsItems(value) {
+    value = parseMaybeJson(value);
     if (Array.isArray(value)) return value;
     if (!value || typeof value !== 'object') return [];
     const vals = Object.values(value);
     if (!vals.length) return [];
-    if (vals.every((v) => v && typeof v === 'object')) return vals;
+    if (vals.every((v) => v != null && (typeof v === 'object' || typeof v === 'string'))) return vals;
     return [];
   }
 
   function locateItems(obj) {
+    obj = parseMaybeJson(obj);
     if (!obj || typeof obj !== 'object') return [];
     for (const key of ITEM_KEYS) {
-      const direct = firstValue(obj, [key]);
+      const direct = parseMaybeJson(firstValue(obj, [key]));
       const arr = objectValuesAsItems(direct);
       if (arr.length) return arr;
     }
@@ -399,21 +431,46 @@
     return [];
   }
 
+  function nestedItemValue(raw, keys) {
+    let value = firstValue(raw, keys);
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const nested = firstValue(value, keys.concat(['name', 'nama', 'title', 'label', 'value']));
+      if (nested !== undefined) value = nested;
+    }
+    return value;
+  }
+
   function normalizeItem(raw) {
+    raw = parseMaybeJson(raw);
+    if (typeof raw === 'string' || typeof raw === 'number') {
+      const name = String(raw).trim();
+      return name ? { name, baseName: name, variant: '', qty: 1, price: 0, subtotal: 0, raw } : null;
+    }
+    if (Array.isArray(raw)) {
+      raw = { name: raw[0], qty: raw[1], price: raw[2], subtotal: raw[3] };
+    }
     if (!raw || typeof raw !== 'object') return null;
-    const baseName = firstValue(raw, NAME_KEYS);
-    if (!baseName) return null;
-    let qty = toNumber(firstValue(raw, QTY_KEYS));
+    const baseName = nestedItemValue(raw, NAME_KEYS);
+    if (!baseName || typeof baseName === 'object') return null;
+    let qty = toNumber(nestedItemValue(raw, QTY_KEYS));
     if (!qty) qty = 1;
     if (qty <= 0) return null;
-    const variant = firstValue(raw, VARIANT_KEYS);
+    const variant = nestedItemValue(raw, VARIANT_KEYS);
     let name = String(baseName).trim();
-    const variantText = variant == null ? '' : String(variant).trim();
+    let variantText = variant == null || typeof variant === 'object' ? '' : String(variant).trim();
+    const options = firstValue(raw, ['options', 'modifiers', 'customizations', 'selectedOptions']);
+    if (!variantText && options && typeof options === 'object') {
+      variantText = Object.values(options).filter((v) => typeof v === 'string' || typeof v === 'number').join(' / ');
+    }
     if (variantText && !normalizeText(name).includes(normalizeText(variantText))) {
       name = `${name} - ${variantText}`;
     }
-    const price = toNumber(firstValue(raw, PRICE_KEYS));
-    let subtotal = toNumber(firstValue(raw, SUBTOTAL_KEYS));
+    let price = toNumber(nestedItemValue(raw, PRICE_KEYS));
+    if (!price) {
+      const productNode = firstValue(raw, ['product', 'item', 'menu']);
+      if (productNode && typeof productNode === 'object') price = toNumber(firstValue(productNode, PRICE_KEYS));
+    }
+    let subtotal = toNumber(nestedItemValue(raw, SUBTOTAL_KEYS));
     if (!subtotal && price) subtotal = price * qty;
     return {
       name,
@@ -436,6 +493,7 @@
   }
 
   function normalizeTransaction(obj, fallbackKey, sourcePath) {
+    obj = parseMaybeJson(obj);
     const rawItems = locateItems(obj);
     const items = rawItems.map(normalizeItem).filter(Boolean);
     if (!items.length) return null;
@@ -447,7 +505,10 @@
     const cashier = typeof cashierRaw === 'object'
       ? String(firstValue(cashierRaw, ['name', 'username', 'displayName']) || 'Tidak diketahui')
       : String(cashierRaw || 'Tidak diketahui');
-    const payment = String(firstValue(obj, PAYMENT_KEYS) || 'Tidak diketahui');
+    const paymentRaw = firstValue(obj, PAYMENT_KEYS);
+    const payment = typeof paymentRaw === 'object'
+      ? String(firstValue(paymentRaw, ['name', 'label', 'type', 'method', 'metode']) || 'Tidak diketahui')
+      : String(paymentRaw || 'Tidak diketahui');
     const note = String(firstValue(obj, NOTE_KEYS) || '').trim();
     const id = String(firstValue(obj, ID_KEYS) || fallbackKey || `${date.getTime()}-${items.length}-${total}`);
     return { id, date, total, cashier, payment, note, items, sourcePath: sourcePath || '', raw: obj };
@@ -460,7 +521,8 @@
     let visited = 0;
 
     function walk(node, path, keyHint, depth) {
-      if (node == null || typeof node !== 'object' || depth > 8 || visited > maxNodes) return;
+      node = parseMaybeJson(node);
+      if (node == null || typeof node !== 'object' || depth > 11 || visited > maxNodes) return;
       if (seen.has(node)) return;
       seen.add(node);
       visited += 1;
@@ -510,7 +572,8 @@
     const maxNodes = 30000;
 
     function walk(node, path, keyHint, depth, inExpenseBranch) {
-      if (node == null || typeof node !== 'object' || depth > 9 || visited > maxNodes) return;
+      node = parseMaybeJson(node);
+      if (node == null || typeof node !== 'object' || depth > 11 || visited > maxNodes) return;
       if (seen.has(node)) return;
       seen.add(node);
       visited += 1;
@@ -541,7 +604,7 @@
   }
 
   function fingerprintExpense(row) {
-    return `${jakartaDateTime(row.date)}|${normalizeText(row.cashier)}|${Math.round(row.amount)}|${normalizeText(row.category)}|${normalizeText(row.note)}`;
+    return `${jakartaDateTime(row.date)}|${cashierKey(row.cashier)}|${Math.round(row.amount)}|${normalizeText(row.category)}|${normalizeText(row.note)}`;
   }
 
   function dedupeExpenses(list) {
@@ -555,7 +618,7 @@
 
   function fingerprintTransaction(tx) {
     const items = tx.items.map((i) => `${normalizeText(i.name)}:${i.qty}:${i.subtotal}`).sort().join('|');
-    return `${jakartaDateTime(tx.date)}|${normalizeText(tx.cashier)}|${Math.round(tx.total)}|${items}`;
+    return `${jakartaDateTime(tx.date)}|${cashierKey(tx.cashier)}|${Math.round(tx.total)}|${items}`;
   }
 
   function dedupeTransactions(list) {
@@ -591,37 +654,140 @@
     return { txs, expenses, sources };
   }
 
+  function readGlobalBinding(name) {
+    try {
+      const value = (0, eval)(name);
+      return value && typeof value === 'object' ? value : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function scanKnownGlobals() {
     const txs = [];
     const expenses = [];
     const sources = [];
-    const names = ['transactions', 'transactionData', 'sales', 'orders', 'appData', 'dbData', 'allTransactions', 'riwayatTransaksi', 'expenses', 'expenseData', 'pengeluaran', 'dailyExpenses'];
+    const names = [
+      'transactions', 'transactionData', 'transactionsData', 'transactionHistory', 'riwayatTransaksi',
+      'sales', 'salesData', 'orders', 'ordersData', 'appData', 'dbData', 'allTransactions',
+      'posData', 'appState', 'storeData', 'dataStore', 'expenses', 'expensesData', 'expenseData',
+      'pengeluaran', 'dailyExpenses'
+    ];
+    const scanned = new Set();
     names.forEach((name) => {
-      try {
-        const value = window[name];
-        if (!value || typeof value !== 'object') return;
-        const extracted = extractTransactions(value, `window.${name}`);
-        const extractedExpenses = extractExpenses(value, `window.${name}`);
+      const candidates = [
+        { label: `window.${name}`, value: (() => { try { return window[name]; } catch (_) { return null; } })() },
+        { label: `global:${name}`, value: readGlobalBinding(name) }
+      ];
+      candidates.forEach(({ label, value }) => {
+        if (!value || typeof value !== 'object' || scanned.has(value)) return;
+        scanned.add(value);
+        const extracted = extractTransactions(value, label);
+        const extractedExpenses = extractExpenses(value, label);
         if (extracted.length) {
           txs.push(...extracted);
-          sources.push({ name: `Window: ${name}`, count: extracted.length });
+          sources.push({ name: `Aplikasi: ${name}`, count: extracted.length });
         }
         if (extractedExpenses.length) expenses.push(...extractedExpenses);
-      } catch (_) { /* blocked global */ }
+        maybeDiscoverOwnerNumber(value);
+      });
     });
     return { txs, expenses, sources };
   }
 
-  async function fetchFirebaseData() {
-    const dbUrl = String(state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
-    const response = await fetch(`${dbUrl}/.json`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-    const data = await response.json();
+  function promiseWithTimeout(promise, milliseconds, label) {
+    let timer;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => clearTimeout(timer)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label || 'Operasi'} timeout`)), milliseconds);
+      })
+    ]);
+  }
+
+  function firebaseDataResult(data, sourceLabel) {
     maybeDiscoverOwnerNumber(data);
-    const txs = extractTransactions(data, 'firebase');
-    const expenses = extractExpenses(data, 'firebase');
+    const txs = extractTransactions(data, sourceLabel);
+    const expenses = extractExpenses(data, sourceLabel);
     const adjustments = normalizeAdjustmentCollection(data && (data.analyticsAdjustments || data.tecoAnalyticsAdjustments));
-    return { data, txs, expenses, adjustments, sources: txs.length ? [{ name: 'Firebase Realtime Database', count: txs.length }] : [] };
+    return {
+      data,
+      txs,
+      expenses,
+      adjustments,
+      sources: txs.length ? [{ name: sourceLabel, count: txs.length }] : []
+    };
+  }
+
+  function getCompatFirebaseDatabases() {
+    const candidates = [];
+    try {
+      if (window.firebase && typeof window.firebase.database === 'function') candidates.push(window.firebase.database());
+    } catch (_) { /* noop */ }
+    ['database', 'firebaseDatabase', 'realtimeDatabase', 'rtdb'].forEach((name) => {
+      try {
+        const value = window[name] || readGlobalBinding(name);
+        if (value && typeof value.ref === 'function') candidates.push(value);
+      } catch (_) { /* noop */ }
+    });
+    return candidates.filter((db, index) => db && candidates.indexOf(db) === index);
+  }
+
+  async function fetchFirebaseSdkData() {
+    const databases = getCompatFirebaseDatabases();
+    let lastError = null;
+    for (const db of databases) {
+      try {
+        const ref = db.ref('/');
+        const snapshot = await promiseWithTimeout(ref.once('value'), 8000, 'Firebase SDK');
+        const data = snapshot && typeof snapshot.val === 'function' ? snapshot.val() : snapshot;
+        return firebaseDataResult(data || {}, 'Firebase SDK aplikasi');
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (lastError) throw lastError;
+    throw new Error('Firebase SDK aplikasi tidak ditemukan');
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function fetchFirebaseData() {
+    const sdkDatabases = getCompatFirebaseDatabases();
+    if (sdkDatabases.length) {
+      try { return await fetchFirebaseSdkData(); } catch (_) { /* lanjut ke REST */ }
+    }
+
+    const dbUrl = String(state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
+    try {
+      const data = await fetchJson(`${dbUrl}/.json`);
+      return firebaseDataResult(data || {}, 'Firebase Realtime Database');
+    } catch (rootError) {
+      const paths = [
+        'transactions', 'sales', 'orders', 'transactionData', 'riwayatTransaksi',
+        'data/transactions', 'appData/transactions', 'posData/transactions',
+        'expenses', 'pengeluaran', 'dailyExpenses', 'analyticsAdjustments'
+      ];
+      const settled = await Promise.allSettled(paths.map(async (path) => ({ path, data: await fetchJson(`${dbUrl}/${path}.json`) })));
+      const merged = {};
+      let successful = 0;
+      settled.forEach((result) => {
+        if (result.status !== 'fulfilled' || result.value.data == null) return;
+        successful += 1;
+        const parts = result.value.path.split('/');
+        let cursor = merged;
+        parts.forEach((part, index) => {
+          if (index === parts.length - 1) cursor[part] = result.value.data;
+          else cursor = cursor[part] || (cursor[part] = {});
+        });
+      });
+      if (!successful) throw rootError;
+      return firebaseDataResult(merged, 'Firebase REST per koleksi');
+    }
   }
 
   function maybeDiscoverOwnerNumber(root) {
@@ -649,48 +815,126 @@
     walk(root, 0);
   }
 
-  async function loadTransactions() {
+  async function loadTransactions(options) {
+    const silent = Boolean(options && options.silent);
     if (!isAuthenticated()) {
       console.warn('[TeCo Analytics] Data tidak dimuat karena pengguna belum login.');
       return;
     }
-    if (state.loading) return;
+    if (state.loading) {
+      state.reloadQueued = true;
+      return;
+    }
     state.loading = true;
+    state.reloadQueued = false;
     state.loadErrors = [];
-    renderStatus('Memuat data transaksi…');
+    if (!silent) renderStatus('Memuat dan menyinkronkan data penjualan…');
     const all = [];
     const allExpenses = [];
     const sources = [];
 
-    const local = scanLocalStorage();
-    all.push(...local.txs);
-    allExpenses.push(...local.expenses);
-    sources.push(...local.sources);
-
-    const globals = scanKnownGlobals();
-    all.push(...globals.txs);
-    allExpenses.push(...globals.expenses);
-    sources.push(...globals.sources);
-
-    let cloudAdjustments = [];
     try {
-      const firebase = await fetchFirebaseData();
-      all.push(...firebase.txs);
-      allExpenses.push(...(firebase.expenses || []));
-      sources.push(...firebase.sources);
-      cloudAdjustments = firebase.adjustments || [];
-    } catch (err) {
-      state.loadErrors.push(`Firebase: ${err && err.message ? err.message : err}`);
-    }
+      const local = scanLocalStorage();
+      all.push(...local.txs);
+      allExpenses.push(...local.expenses);
+      sources.push(...local.sources);
 
-    state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
-    saveAdjustments();
-    state.transactions = dedupeTransactions(all);
-    state.expenses = dedupeExpenses(allExpenses);
-    state.sources = sources;
-    state.lastLoadedAt = new Date();
-    state.loading = false;
-    renderAll();
+      const globals = scanKnownGlobals();
+      all.push(...globals.txs);
+      allExpenses.push(...globals.expenses);
+      sources.push(...globals.sources);
+
+      let cloudAdjustments = [];
+      try {
+        const firebase = await fetchFirebaseData();
+        all.push(...firebase.txs);
+        allExpenses.push(...(firebase.expenses || []));
+        sources.push(...firebase.sources);
+        cloudAdjustments = firebase.adjustments || [];
+      } catch (err) {
+        state.loadErrors.push(`Firebase: ${err && err.message ? err.message : err}`);
+      }
+
+      state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
+      saveAdjustments();
+      state.transactions = dedupeTransactions(all);
+      state.expenses = dedupeExpenses(allExpenses);
+      state.sources = sources;
+      state.lastLoadedAt = new Date();
+      state.lastSyncReason = options && options.reason ? String(options.reason) : 'manual';
+      renderAll();
+      installFirebaseRealtimeSync();
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      state.loadErrors.push(`Sinkronisasi: ${message}`);
+      console.error('[TeCo Analytics] Gagal menyinkronkan laporan:', err);
+      if (!silent) renderStatus(`Gagal menyinkronkan laporan: ${message}`, true);
+    } finally {
+      state.loading = false;
+      if (state.reloadQueued) {
+        state.reloadQueued = false;
+        scheduleDataReload('antrian perubahan', 120);
+      }
+    }
+  }
+
+  function scheduleDataReload(reason, delay) {
+    if (!isAuthenticated()) return;
+    clearTimeout(dataReloadTimer);
+    dataReloadTimer = setTimeout(() => {
+      dataReloadTimer = null;
+      loadTransactions({ silent: true, reason: reason || 'perubahan data' });
+    }, Number.isFinite(delay) ? delay : 450);
+  }
+
+  function installFirebaseRealtimeSync() {
+    if (firebaseRealtimeInstalled) return;
+    const databases = getCompatFirebaseDatabases();
+    if (!databases.length) return;
+    firebaseRealtimeInstalled = true;
+    databases.forEach((db) => {
+      try {
+        const ref = db.ref('/');
+        const handler = () => scheduleDataReload('Firebase realtime', 300);
+        ref.on('value', handler, () => {});
+        firebaseRealtimeHandlers.push({ ref, handler });
+      } catch (_) { /* noop */ }
+    });
+  }
+
+  function installStorageSyncHooks() {
+    if (storageHooksInstalled || typeof Storage === 'undefined') return;
+    storageHooksInstalled = true;
+    ['setItem', 'removeItem', 'clear'].forEach((methodName) => {
+      const original = Storage.prototype[methodName];
+      if (typeof original !== 'function') return;
+      Storage.prototype[methodName] = function (...args) {
+        const result = original.apply(this, args);
+        const key = String(args[0] || '');
+        if (key !== SETTINGS_KEY && key !== ADJUSTMENTS_KEY) scheduleDataReload(`storage:${key || methodName}`, 180);
+        return result;
+      };
+    });
+  }
+
+  function startSalesSyncMonitor() {
+    installStorageSyncHooks();
+    window.addEventListener('focus', () => scheduleDataReload('fokus aplikasi', 200));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleDataReload('aplikasi aktif', 200);
+    });
+    document.addEventListener('click', (event) => {
+      const target = event.target && event.target.closest ? event.target.closest('button,a,[role="button"]') : null;
+      if (!target || target.closest('#tecoAnalyticsOverlay')) return;
+      const text = normalizeText(target.textContent);
+      if (text.includes('KONFIRMASI BAYAR') || text.includes('TRANSAKSI BARU') || text === 'BAYAR SEKARANG') {
+        scheduleDataReload('transaksi penjualan', text.includes('KONFIRMASI') ? 900 : 350);
+        setTimeout(() => scheduleDataReload('verifikasi transaksi', 50), 2200);
+      }
+    }, true);
+    setInterval(() => {
+      if (isAuthenticated()) scheduleDataReload('sinkron berkala', 50);
+    }, 5000);
   }
 
   function mapRecipe(productName) {
@@ -720,7 +964,7 @@
     const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
     return state.transactions.filter((tx) => {
       const periodMatch = mode === 'monthly' ? jakartaMonthKey(tx.date) === period : jakartaDateKey(tx.date) === period;
-      const cashierMatch = state.cashier === 'ALL' || normalizeText(tx.cashier) === normalizeText(state.cashier);
+      const cashierMatch = state.cashier === 'ALL' || sameCashier(tx.cashier, state.cashier);
       return periodMatch && cashierMatch;
     });
   }
@@ -729,7 +973,7 @@
     const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
     return state.expenses.filter((row) => {
       const periodMatch = mode === 'monthly' ? jakartaMonthKey(row.date) === period : jakartaDateKey(row.date) === period;
-      const cashierMatch = state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier);
+      const cashierMatch = state.cashier === 'ALL' || sameCashier(row.cashier, state.cashier);
       return periodMatch && cashierMatch;
     });
   }
@@ -767,7 +1011,7 @@
     const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
     const date = String(row.date || '');
     const periodMatch = mode === 'monthly' ? date.slice(0, 7) === period : date === period;
-    const cashierMatch = state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier);
+    const cashierMatch = state.cashier === 'ALL' || sameCashier(row.cashier, state.cashier);
     return periodMatch && cashierMatch;
   }
 
@@ -927,7 +1171,9 @@
   }
 
   function sourceSummary() {
-    if (!state.sources.length) return 'Belum menemukan sumber transaksi';
+    if (!state.sources.length) {
+      return state.loadErrors.length ? `Belum menemukan transaksi • ${state.loadErrors.join(' • ')}` : 'Belum menemukan sumber transaksi';
+    }
     const unique = [];
     const seen = new Set();
     state.sources.forEach((source) => {
@@ -939,9 +1185,13 @@
   }
 
   function getCashiers() {
-    const values = new Set();
-    state.transactions.forEach((tx) => values.add(tx.cashier || 'Tidak diketahui'));
-    return Array.from(values).sort((a, b) => a.localeCompare(b));
+    const values = new Map();
+    state.transactions.forEach((tx) => {
+      const label = tx.cashier || 'Tidak diketahui';
+      const key = cashierKey(label) || normalizeText(label);
+      if (!values.has(key)) values.set(key, label);
+    });
+    return Array.from(values.values()).sort((a, b) => a.localeCompare(b));
   }
 
   function injectStyles() {
@@ -1134,12 +1384,12 @@
   function currentCashierName() {
     const session = getCurrentSession();
     if (session.role !== 'cashier') return '';
-    const normalized = normalizeText(session.name);
-    const known = getCashiers().find((name) => normalizeText(name) === normalized);
+    const key = cashierKey(session.name);
+    const known = getCashiers().find((name) => cashierKey(name) === key);
     if (known) return known;
-    const match = normalized.match(/KASIR\s*([0-9]+)/);
+    const match = key.match(/KASIR([0-9]+)/);
     if (match) {
-      const byNumber = getCashiers().find((name) => normalizeText(name) === `KASIR ${match[1]}`);
+      const byNumber = getCashiers().find((name) => cashierKey(name) === `KASIR${match[1]}`);
       return byNumber || `Kasir ${match[1]}`;
     }
     return session.name && !/^KASIR$/i.test(session.name) ? session.name : '';
@@ -1376,7 +1626,10 @@
     if (admin) {
       const options = ['<option value="ALL">Semua Kasir</option>'].concat(cashiers.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`));
       select.innerHTML = options.join('');
-      if (state.cashier !== 'ALL' && !cashiers.includes(state.cashier)) state.cashier = 'ALL';
+      if (state.cashier !== 'ALL') {
+        const matchedCashier = cashiers.find((name) => sameCashier(name, state.cashier));
+        state.cashier = matchedCashier || 'ALL';
+      }
       select.value = state.cashier;
       select.disabled = false;
     } else {
@@ -1481,7 +1734,7 @@
   function canManageAdjustment(row) {
     if (isAdmin()) return true;
     const own = currentCashierName();
-    return Boolean(own && normalizeText(row.cashier) === normalizeText(own));
+    return Boolean(own && sameCashier(row.cashier, own));
   }
 
   function renderAdjustments(editId) {
@@ -1494,11 +1747,11 @@
     const selectedCashier = editing ? editing.cashier : (admin ? (state.cashier === 'ALL' ? '' : state.cashier) : ownName);
     const variantNames = Array.from(new Set(allKnownVariants().map((row) => row.name))).sort((a, b) => a.localeCompare(b));
     const visibleRows = state.adjustments
-      .filter((row) => admin || normalizeText(row.cashier) === normalizeText(ownName))
-      .filter((row) => !admin || state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier))
+      .filter((row) => admin || sameCashier(row.cashier, ownName))
+      .filter((row) => !admin || state.cashier === 'ALL' || sameCashier(row.cashier, state.cashier))
       .filter((row) => !state.dailyDate || row.date === state.dailyDate)
       .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    const cashierOptions = getCashiers().map((name) => `<option value="${escapeHtml(name)}"${normalizeText(name) === normalizeText(selectedCashier) ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
+    const cashierOptions = getCashiers().map((name) => `<option value="${escapeHtml(name)}"${sameCashier(name, selectedCashier) ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
 
     content.innerHTML = `
       <div class="ta-status">Penyesuaian hanya mengoreksi hasil laporan dan analisis bahan; transaksi asli tetap tersimpan tanpa perubahan. Nilai positif menambah, nilai negatif mengurangi.</div>
@@ -1945,7 +2198,8 @@
     hookExistingButtons();
     exposeApi();
     startAccessMonitor();
-    console.info(`[TeCo Analytics] Add-on v${VERSION} aktif di tab Laporan setelah login.`);
+    startSalesSyncMonitor();
+    console.info(`[TeCo Analytics] Add-on v${VERSION} aktif dengan sinkronisasi penjualan realtime.`);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });

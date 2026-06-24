@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.2
+
+- Menyinkronkan laporan langsung dengan sumber transaksi internal aplikasi POS.
+- Menambahkan pembacaan Firebase melalui SDK aplikasi sebelum memakai REST.
+- Menambahkan refresh otomatis setelah pembayaran, saat aplikasi aktif kembali, dan secara berkala.
+- Menyamakan identitas kasir seperti `kasir1`, `Kasir 1`, dan `Cashier 1`.
+- Menambahkan dukungan `cartItems`, `transactionItems`, item bertingkat, dan JSON string.
+- Menambahkan format tanggal Indonesia bertanda koma atau titik pada jam.
+- Menambahkan fallback pembacaan beberapa koleksi Firebase bila akses root ditolak.
+
+
 ## v1.2.1
 
 - Mengembalikan rincian pengeluaran ke pesan WhatsApp harian dan bulanan.

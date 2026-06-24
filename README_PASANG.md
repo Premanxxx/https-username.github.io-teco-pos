@@ -1,4 +1,4 @@
-# Te.Co POS — Analytics Add-on v1.2.1
+# Te.Co POS — Analytics Add-on v1.2.2
 
 Add-on ini menempatkan fitur **Analisis Penjualan & Bahan** di dalam tab **Laporan** aplikasi Te.Co POS. Fitur tidak muncul pada halaman login dan otomatis ditutup saat pengguna logout.
 
@@ -40,12 +40,24 @@ Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebaga
 3. Buka `index.html` dan pastikan baris berikut berada tepat sebelum `</body>`:
 
 ```html
-<script src="./teco-analytics-addon.js?v=1.2.1"></script>
+<script src="./teco-analytics-addon.js?v=1.2.2"></script>
 ```
 
 4. Hapus baris pemanggilan add-on versi lama bila ada, supaya file tidak dimuat dua kali.
 5. Commit perubahan.
 6. Setelah GitHub Pages diperbarui, lakukan hard refresh (`Ctrl + F5`) atau bersihkan cache aplikasi/PWA.
+
+## Sinkronisasi dengan penjualan
+
+Versi 1.2.2 membaca data dari beberapa jalur sekaligus agar laporan mengikuti transaksi POS:
+
+- variabel transaksi internal aplikasi, termasuk variabel global `let` yang tidak tampil pada `window`;
+- localStorage/sessionStorage aplikasi;
+- Firebase SDK yang sudah digunakan aplikasi;
+- Firebase REST sebagai cadangan;
+- struktur transaksi bertingkat seperti `cartItems`, `transactionItems`, dan data item berbentuk JSON string.
+
+Setelah tombol **Konfirmasi Bayar** ditekan, laporan dijadwalkan memuat ulang otomatis. Sinkronisasi juga dijalankan saat aplikasi kembali aktif dan secara berkala selama pengguna masih login. Nama akun seperti `kasir1`, `Kasir 1`, dan `Cashier 1` diperlakukan sebagai kasir yang sama.
 
 ## Cara penggunaan
 
@@ -107,5 +119,5 @@ Pembatasan peran diterapkan pada antarmuka dan fungsi add-on. Karena aplikasi be
 - Pastikan pengguna sudah login.
 - Pastikan kartu dibuka dari tab **Laporan**, bukan dari `analytics.html` secara langsung.
 - Pastikan hanya ada satu pemanggilan `teco-analytics-addon.js`.
-- Ubah query cache menjadi `v=1.2.1`.
+- Ubah query cache menjadi `v=1.2.2`.
 - Lakukan `Ctrl + F5` atau hapus cache PWA/browser.
