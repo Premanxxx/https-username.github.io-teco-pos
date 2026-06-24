@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.1
+
+- Mengembalikan rincian pengeluaran ke pesan WhatsApp harian dan bulanan.
+- Menambahkan total pengeluaran dan saldo bersih pada ringkasan WhatsApp.
+- Mengembalikan rekap tipe pembayaran beserta jumlah transaksi dan nominalnya.
+- Mengembalikan bagian Catatan dari transaksi, pengeluaran, dan penyesuaian laporan.
+- Menambahkan pembacaan data pengeluaran dari localStorage, variabel aplikasi, dan Firebase.
+- Menambahkan kolom Catatan transaksi pada sheet transaksi Excel.
+
 ## v1.2.0
 
 - Memindahkan akses analisis ke kartu di dalam tab Laporan.

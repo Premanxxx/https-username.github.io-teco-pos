@@ -1,4 +1,4 @@
-# Te.Co POS — Analytics Add-on v1.2.0
+# Te.Co POS — Analytics Add-on v1.2.1
 
 Add-on ini menempatkan fitur **Analisis Penjualan & Bahan** di dalam tab **Laporan** aplikasi Te.Co POS. Fitur tidak muncul pada halaman login dan otomatis ditutup saat pengguna logout.
 
@@ -18,12 +18,12 @@ Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebaga
 
 ## Fitur laporan
 
-- Rekap total transaksi, total cup, varian, omzet, dan jumlah penyesuaian.
+- Rekap total transaksi, total cup, varian, omzet kotor, pengeluaran, saldo bersih, dan jumlah penyesuaian.
 - Rekap harian dan bulanan.
 - Akumulasi setiap varian yang terjual.
 - Analisis pemakaian bahan berdasarkan resep per cup.
 - Perhitungan konsentrat dan bahan pembentuk konsentrat.
-- Pesan WhatsApp laporan harian atau bulanan.
+- Pesan WhatsApp laporan harian atau bulanan yang tetap memuat tipe pembayaran, rincian pengeluaran, saldo bersih, dan catatan.
 - Ekspor Excel dengan sheet Ringkasan, Varian, Bahan, Transaksi, dan Penyesuaian.
 - Khusus ekspor Admin: sheet Mapping Produk dan Master Resep.
 
@@ -40,7 +40,7 @@ Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebaga
 3. Buka `index.html` dan pastikan baris berikut berada tepat sebelum `</body>`:
 
 ```html
-<script src="./teco-analytics-addon.js?v=1.2.0"></script>
+<script src="./teco-analytics-addon.js?v=1.2.1"></script>
 ```
 
 4. Hapus baris pemanggilan add-on versi lama bila ada, supaya file tidak dimuat dua kali.
@@ -107,5 +107,5 @@ Pembatasan peran diterapkan pada antarmuka dan fungsi add-on. Karena aplikasi be
 - Pastikan pengguna sudah login.
 - Pastikan kartu dibuka dari tab **Laporan**, bukan dari `analytics.html` secara langsung.
 - Pastikan hanya ada satu pemanggilan `teco-analytics-addon.js`.
-- Ubah query cache menjadi `v=1.2.0`.
+- Ubah query cache menjadi `v=1.2.1`.
 - Lakukan `Ctrl + F5` atau hapus cache PWA/browser.

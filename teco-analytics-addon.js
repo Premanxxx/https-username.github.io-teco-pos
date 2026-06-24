@@ -1,10 +1,10 @@
 /*
- * Te.Co Pandawa POS — Analytics Add-on v1.2.0
+ * Te.Co Pandawa POS — Analytics Add-on v1.2.1
  * Adds daily/monthly variant recap, WhatsApp report, Excel sheets,
  * and ingredient usage analysis based on the uploaded recipe workbook.
  *
  * Install: add before </body> in the existing index.html:
- * <script src="./teco-analytics-addon.js?v=1.2.0"></script>
+ * <script src="./teco-analytics-addon.js?v=1.2.1"></script>
  */
 (function () {
   'use strict';
@@ -12,7 +12,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.2.1';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
@@ -157,6 +157,7 @@
     adjustments: loadAdjustments(),
     session: { authenticated: false, role: 'guest', name: '' },
     transactions: [],
+    expenses: [],
     sources: [],
     loadErrors: [],
     activeTab: 'daily',
@@ -363,7 +364,7 @@
     return undefined;
   }
 
-  const DATE_KEYS = ['date', 'tanggal', 'createdAt', 'created_at', 'timestamp', 'time', 'datetime', 'waktu', 'paidAt', 'checkoutAt', 'created'];
+  const DATE_KEYS = ['date', 'tanggal', 'createdAt', 'created_at', 'timestamp', 'time', 'datetime', 'waktu', 'paidAt', 'checkoutAt', 'created', 'expenseDate', 'expense_date', 'transactionDate', 'tanggalPengeluaran'];
   const ITEM_KEYS = ['items', 'cart', 'products', 'details', 'detail', 'orderItems', 'order_items', 'menu', 'pesanan', 'itemList', 'lineItems'];
   const NAME_KEYS = ['name', 'productName', 'product_name', 'itemName', 'item_name', 'menuName', 'title', 'product', 'item', 'nama', 'variantName'];
   const QTY_KEYS = ['qty', 'quantity', 'jumlah', 'count', 'cup', 'cups', 'amountQty'];
@@ -374,6 +375,9 @@
   const PAYMENT_KEYS = ['paymentMethod', 'payment_method', 'payment', 'method', 'metode', 'paymentType', 'payment_type'];
   const ID_KEYS = ['id', 'transactionId', 'transaction_id', 'orderId', 'order_id', 'invoice', 'receiptNo', 'receipt_no'];
   const VARIANT_KEYS = ['variant', 'variantName', 'variant_name', 'flavor', 'rasa', 'option', 'size', 'ukuran', 'modifier'];
+  const NOTE_KEYS = ['note', 'notes', 'catatan', 'remark', 'remarks', 'description', 'keterangan', 'memo', 'customerNote', 'orderNote', 'transactionNote', 'noteText'];
+  const EXPENSE_AMOUNT_KEYS = ['amount', 'nominal', 'value', 'total', 'expenseAmount', 'expense_amount', 'jumlah', 'biaya', 'expense', 'cost'];
+  const EXPENSE_CATEGORY_KEYS = ['category', 'kategori', 'type', 'jenis', 'expenseType', 'expense_type'];
 
   function objectValuesAsItems(value) {
     if (Array.isArray(value)) return value;
@@ -444,8 +448,9 @@
       ? String(firstValue(cashierRaw, ['name', 'username', 'displayName']) || 'Tidak diketahui')
       : String(cashierRaw || 'Tidak diketahui');
     const payment = String(firstValue(obj, PAYMENT_KEYS) || 'Tidak diketahui');
+    const note = String(firstValue(obj, NOTE_KEYS) || '').trim();
     const id = String(firstValue(obj, ID_KEYS) || fallbackKey || `${date.getTime()}-${items.length}-${total}`);
-    return { id, date, total, cashier, payment, items, sourcePath: sourcePath || '', raw: obj };
+    return { id, date, total, cashier, payment, note, items, sourcePath: sourcePath || '', raw: obj };
   }
 
   function extractTransactions(root, sourceName) {
@@ -481,6 +486,73 @@
     return found;
   }
 
+  function normalizeExpense(obj, fallbackKey, sourcePath) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    if (locateItems(obj).length) return null;
+    const amount = toNumber(firstValue(obj, EXPENSE_AMOUNT_KEYS));
+    if (!(amount > 0)) return null;
+    const date = parseDate(firstValue(obj, DATE_KEYS), fallbackKey);
+    if (!date) return null;
+    const category = String(firstValue(obj, EXPENSE_CATEGORY_KEYS) || 'Lain-lain').trim() || 'Lain-lain';
+    const note = String(firstValue(obj, NOTE_KEYS) || '').trim();
+    const cashierRaw = firstValue(obj, CASHIER_KEYS);
+    const cashier = typeof cashierRaw === 'object'
+      ? String(firstValue(cashierRaw, ['name', 'username', 'displayName']) || 'Tidak diketahui')
+      : String(cashierRaw || 'Tidak diketahui');
+    const id = String(firstValue(obj, ID_KEYS) || fallbackKey || `${date.getTime()}-${amount}-${category}`);
+    return { id, date, amount, category, note, cashier, sourcePath: sourcePath || '', raw: obj };
+  }
+
+  function extractExpenses(root, sourceName) {
+    const found = [];
+    const seen = new WeakSet();
+    let visited = 0;
+    const maxNodes = 30000;
+
+    function walk(node, path, keyHint, depth, inExpenseBranch) {
+      if (node == null || typeof node !== 'object' || depth > 9 || visited > maxNodes) return;
+      if (seen.has(node)) return;
+      seen.add(node);
+      visited += 1;
+
+      const pathLooksExpense = inExpenseBranch || /(^|[.\[\]_ -])(expenses?|pengeluaran|biaya)([.\]\[_ -]|$)/i.test(path || '');
+      if (!Array.isArray(node) && pathLooksExpense) {
+        const expense = normalizeExpense(node, keyHint, `${sourceName}:${path}`);
+        if (expense) {
+          found.push(expense);
+          return;
+        }
+      }
+
+      if (Array.isArray(node)) {
+        node.forEach((child, index) => walk(child, `${path}[${index}]`, String(index), depth + 1, pathLooksExpense));
+        return;
+      }
+
+      Object.entries(node).forEach(([key, child]) => {
+        const childExpenseBranch = pathLooksExpense || /^(expenses?|pengeluaran|biaya|expenseData|dailyExpenses)$/i.test(key);
+        walk(child, path ? `${path}.${key}` : key, key, depth + 1, childExpenseBranch);
+      });
+    }
+
+    const sourceLooksExpense = /(expenses?|pengeluaran|biaya|expenseData|dailyExpenses)/i.test(String(sourceName || ''));
+    walk(root, '', '', 0, sourceLooksExpense);
+    return found;
+  }
+
+  function fingerprintExpense(row) {
+    return `${jakartaDateTime(row.date)}|${normalizeText(row.cashier)}|${Math.round(row.amount)}|${normalizeText(row.category)}|${normalizeText(row.note)}`;
+  }
+
+  function dedupeExpenses(list) {
+    const map = new Map();
+    list.forEach((row) => {
+      const key = fingerprintExpense(row);
+      if (!map.has(key)) map.set(key, row);
+    });
+    return Array.from(map.values()).sort((a, b) => b.date - a.date);
+  }
+
   function fingerprintTransaction(tx) {
     const items = tx.items.map((i) => `${normalizeText(i.name)}:${i.qty}:${i.subtotal}`).sort().join('|');
     return `${jakartaDateTime(tx.date)}|${normalizeText(tx.cashier)}|${Math.round(tx.total)}|${items}`;
@@ -497,6 +569,7 @@
 
   function scanLocalStorage() {
     const txs = [];
+    const expenses = [];
     const sources = [];
     for (let i = 0; i < localStorage.length; i += 1) {
       const key = localStorage.key(i);
@@ -506,32 +579,37 @@
       try {
         const parsed = JSON.parse(raw);
         const extracted = extractTransactions(parsed, `localStorage:${key}`);
+        const extractedExpenses = extractExpenses(parsed, `localStorage:${key}`);
         if (extracted.length) {
           txs.push(...extracted);
           sources.push({ name: `Local: ${key}`, count: extracted.length });
         }
+        if (extractedExpenses.length) expenses.push(...extractedExpenses);
         maybeDiscoverOwnerNumber(parsed);
       } catch (_) { /* non-JSON value */ }
     }
-    return { txs, sources };
+    return { txs, expenses, sources };
   }
 
   function scanKnownGlobals() {
     const txs = [];
+    const expenses = [];
     const sources = [];
-    const names = ['transactions', 'transactionData', 'sales', 'orders', 'appData', 'dbData', 'allTransactions', 'riwayatTransaksi'];
+    const names = ['transactions', 'transactionData', 'sales', 'orders', 'appData', 'dbData', 'allTransactions', 'riwayatTransaksi', 'expenses', 'expenseData', 'pengeluaran', 'dailyExpenses'];
     names.forEach((name) => {
       try {
         const value = window[name];
         if (!value || typeof value !== 'object') return;
         const extracted = extractTransactions(value, `window.${name}`);
+        const extractedExpenses = extractExpenses(value, `window.${name}`);
         if (extracted.length) {
           txs.push(...extracted);
           sources.push({ name: `Window: ${name}`, count: extracted.length });
         }
+        if (extractedExpenses.length) expenses.push(...extractedExpenses);
       } catch (_) { /* blocked global */ }
     });
-    return { txs, sources };
+    return { txs, expenses, sources };
   }
 
   async function fetchFirebaseData() {
@@ -541,8 +619,9 @@
     const data = await response.json();
     maybeDiscoverOwnerNumber(data);
     const txs = extractTransactions(data, 'firebase');
+    const expenses = extractExpenses(data, 'firebase');
     const adjustments = normalizeAdjustmentCollection(data && (data.analyticsAdjustments || data.tecoAnalyticsAdjustments));
-    return { data, txs, adjustments, sources: txs.length ? [{ name: 'Firebase Realtime Database', count: txs.length }] : [] };
+    return { data, txs, expenses, adjustments, sources: txs.length ? [{ name: 'Firebase Realtime Database', count: txs.length }] : [] };
   }
 
   function maybeDiscoverOwnerNumber(root) {
@@ -580,20 +659,24 @@
     state.loadErrors = [];
     renderStatus('Memuat data transaksi…');
     const all = [];
+    const allExpenses = [];
     const sources = [];
 
     const local = scanLocalStorage();
     all.push(...local.txs);
+    allExpenses.push(...local.expenses);
     sources.push(...local.sources);
 
     const globals = scanKnownGlobals();
     all.push(...globals.txs);
+    allExpenses.push(...globals.expenses);
     sources.push(...globals.sources);
 
     let cloudAdjustments = [];
     try {
       const firebase = await fetchFirebaseData();
       all.push(...firebase.txs);
+      allExpenses.push(...(firebase.expenses || []));
       sources.push(...firebase.sources);
       cloudAdjustments = firebase.adjustments || [];
     } catch (err) {
@@ -603,6 +686,7 @@
     state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
     saveAdjustments();
     state.transactions = dedupeTransactions(all);
+    state.expenses = dedupeExpenses(allExpenses);
     state.sources = sources;
     state.lastLoadedAt = new Date();
     state.loading = false;
@@ -641,6 +725,44 @@
     });
   }
 
+  function filterExpenses(mode) {
+    const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
+    return state.expenses.filter((row) => {
+      const periodMatch = mode === 'monthly' ? jakartaMonthKey(row.date) === period : jakartaDateKey(row.date) === period;
+      const cashierMatch = state.cashier === 'ALL' || normalizeText(row.cashier) === normalizeText(state.cashier);
+      return periodMatch && cashierMatch;
+    });
+  }
+
+  function normalizePaymentLabel(value) {
+    const text = normalizeText(value);
+    if (!text || text === 'TIDAK DIKETAHUI') return 'Tidak diketahui';
+    if (/CASH|TUNAI/.test(text)) return 'Tunai';
+    if (/QRIS|QR CODE|QR/.test(text)) return 'QRIS';
+    if (/TRANSFER|BANK/.test(text)) return 'Transfer';
+    return String(value || 'Tidak diketahui').trim();
+  }
+
+  function collectReportNotes(txs, adjustments) {
+    const notes = [];
+    const seen = new Set();
+    txs.forEach((tx) => {
+      const note = String(tx.note || '').trim();
+      if (!note) return;
+      const label = `${jakartaDateKey(tx.date)} • ${tx.cashier}: ${note}`;
+      const key = normalizeText(label);
+      if (!seen.has(key)) { seen.add(key); notes.push(label); }
+    });
+    adjustments.forEach((row) => {
+      const note = String(row.note || '').trim();
+      if (!note) return;
+      const label = `${row.date} • ${row.cashier} • Penyesuaian ${row.variant}: ${note}`;
+      const key = normalizeText(label);
+      if (!seen.has(key)) { seen.add(key); notes.push(label); }
+    });
+    return notes;
+  }
+
   function adjustmentMatchesPeriod(row, mode) {
     const period = mode === 'monthly' ? state.monthlyMonth : state.dailyDate;
     const date = String(row.date || '');
@@ -656,11 +778,18 @@
   function aggregate(mode) {
     const txs = filterTransactions(mode);
     const variants = new Map();
+    const payments = new Map();
     let totalRevenue = 0;
     let totalCups = 0;
 
     txs.forEach((tx) => {
       totalRevenue += tx.total;
+      const paymentName = normalizePaymentLabel(tx.payment);
+      const paymentKey = normalizeText(paymentName);
+      if (!payments.has(paymentKey)) payments.set(paymentKey, { name: paymentName, count: 0, amount: 0 });
+      const paymentRow = payments.get(paymentKey);
+      paymentRow.count += 1;
+      paymentRow.amount += tx.total;
       tx.items.forEach((item) => {
         const label = item.name || item.baseName || 'Tanpa nama';
         const key = normalizeText(label);
@@ -700,9 +829,20 @@
     totalCups = variantRows.reduce((sum, row) => sum + row.qty, 0);
     totalRevenue = Math.max(0, totalRevenue);
     const materialResult = calculateMaterials(variantRows, totalCups);
+    const expenses = filterExpenses(mode);
+    const totalExpenses = expenses.reduce((sum, row) => sum + toNumber(row.amount), 0);
+    const adjustmentRevenue = adjustments.reduce((sum, row) => sum + toNumber(row.revenueDelta), 0);
+    const paymentRows = Array.from(payments.values()).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+    const notes = collectReportNotes(txs, adjustments);
     return {
       mode,
       txs,
+      expenses,
+      totalExpenses,
+      netRevenue: totalRevenue - totalExpenses,
+      adjustmentRevenue,
+      payments: paymentRows,
+      notes,
       adjustments,
       adjustmentCount: adjustments.length,
       transactionCount: txs.length,
@@ -1493,12 +1633,50 @@
     lines.push(`Total transaksi: *${report.transactionCount}*`);
     lines.push(`Total cup terjual: *${formatDecimal(report.totalCups)} cup*`);
     lines.push(`Jumlah varian: *${report.distinctVariants}*`);
-    lines.push(`Omzet: *${formatRupiah(report.totalRevenue)}*`);
-    if (report.adjustmentCount) lines.push(`Penyesuaian manual: *${report.adjustmentCount}*`);
+    lines.push(`Omzet kotor: *${formatRupiah(report.totalRevenue)}*`);
+    lines.push(`Total pengeluaran: *${formatRupiah(report.totalExpenses)}*`);
+    lines.push(`Saldo bersih: *${formatRupiah(report.netRevenue)}*`);
+    if (report.adjustmentCount) lines.push(`Penyesuaian manual: *${report.adjustmentCount}* (${formatRupiah(report.adjustmentRevenue)})`);
+
+    lines.push('');
+    lines.push('*TIPE PEMBAYARAN*');
+    if (!report.payments.length) lines.push('- Belum ada data pembayaran');
+    report.payments.forEach((row) => lines.push(`- ${row.name}: *${row.count} transaksi* — ${formatRupiah(row.amount)}`));
+    if (report.adjustmentRevenue) lines.push(`- Penyesuaian laporan tanpa tipe pembayaran: ${formatRupiah(report.adjustmentRevenue)}`);
+
+    lines.push('');
+    lines.push('*LAPORAN PENGELUARAN*');
+    if (!report.expenses.length) {
+      lines.push('- Tidak ada pengeluaran pada periode ini');
+    } else {
+      report.expenses.slice().sort((a, b) => a.date - b.date).slice(0, 50).forEach((row, index) => {
+        const note = row.note ? ` — ${row.note}` : '';
+        const cashier = row.cashier && normalizeText(row.cashier) !== 'TIDAK DIKETAHUI' ? ` • ${row.cashier}` : '';
+        lines.push(`${index + 1}. ${jakartaDateKey(row.date)}${cashier} • ${row.category}: *${formatRupiah(row.amount)}*${note}`);
+      });
+      if (report.expenses.length > 50) lines.push(`- ...dan ${report.expenses.length - 50} pengeluaran lainnya`);
+    }
+
+    lines.push('');
+    lines.push('*CATATAN*');
+    if (!report.notes.length && !report.expenses.some((row) => row.note)) {
+      lines.push('- Tidak ada catatan');
+    } else {
+      report.notes.slice(0, 30).forEach((note) => lines.push(`- ${note}`));
+      const expenseNotes = report.expenses
+        .filter((row) => row.note)
+        .map((row) => `${jakartaDateKey(row.date)} • Pengeluaran ${row.category}: ${row.note}`);
+      expenseNotes.slice(0, Math.max(0, 30 - report.notes.length)).forEach((note) => lines.push(`- ${note}`));
+      const shown = Math.min(30, report.notes.length + expenseNotes.length);
+      const totalNotes = report.notes.length + expenseNotes.length;
+      if (totalNotes > shown) lines.push(`- ...dan ${totalNotes - shown} catatan lainnya`);
+    }
+
     lines.push('');
     lines.push('*REKAP VARIAN TERJUAL*');
     if (!report.variants.length) lines.push('- Belum ada transaksi');
     report.variants.slice(0, 50).forEach((row, index) => lines.push(`${index + 1}. ${row.name}: *${formatDecimal(row.qty)} cup*`));
+
     lines.push('');
     lines.push('*ANALISIS BAHAN TERPAKAI*');
     if (report.concentrateUsageMl > 0) {
@@ -1543,6 +1721,7 @@
           ID_Transaksi: tx.id,
           Kasir: tx.cashier,
           Pembayaran: tx.payment,
+          Catatan: tx.note || '',
           Varian: item.name,
           Qty_Cup: item.qty,
           Harga_Satuan: item.price,
