@@ -2314,70 +2314,153 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();
-/***********************
- * TECO OWNER DASHBOARD v2
- ***********************/
+/*
+ * Te.Co Pandawa POS — Analytics Add-on v1.3.0 (FULL INTEGRATED)
+ * + Owner Dashboard Module
+ * + Profit Overview
+ * + Role-based UI
+ */
 
-function getTransactions(){
-  return loadData("transactions") || [];
-}
+(function () {
+  'use strict';
 
-// ===== CORE METRICS =====
-function getDashboardData(){
-  let sales = getTransactions();
-  let inv = getTotalInvestment();
+  if (window.__TECO_ANALYTICS_ADDON__) return;
+  window.__TECO_ANALYTICS_ADDON__ = true;
 
-  let totalIncome = sales.reduce((a,b)=>a + Number(b.total || 0),0);
+  const VERSION = '1.3.0';
 
-  let totalExpense =
-    inv.modalAwal +
-    inv.harian +
-    inv.mingguan +
-    inv.gaji +
-    inv.takTerduga +
-    inv.lain;
+  /* =========================
+   * STATE EXTENSION
+   * ========================= */
+  const state = window.state || {};
 
-  let profit = totalIncome - totalExpense;
-
-  return {
-    totalIncome,
-    totalExpense,
-    profit,
-    totalTransaksi: sales.length
+  state.ownerDashboard = {
+    visible: false
   };
-}
-function getTopProducts(){
-  let sales = getTransactions();
-  let map = {};
 
-  sales.forEach(t => {
-    (t.items || []).forEach(i => {
-      map[i.name] = (map[i.name] || 0) + i.qty;
-    });
-  });
-
-  return Object.entries(map)
-    .map(([name,qty]) => ({name,qty}))
-    .sort((a,b)=>b.qty - a.qty)
-    .slice(0,5);
-}
-function getROI(){
-  let d = getDashboardData();
-
-  let inv = getTotalInvestment().modalAwal;
-
-  if(inv === 0) return 0;
-
-  return ((d.profit / inv) * 100).toFixed(2);
-}
-function checkAlerts(){
-  let d = getDashboardData();
-
-  if(d.profit < 0){
-    console.warn("⚠ RUGI HARI INI");
+  /* =========================
+   * ROLE HELPERS
+   * ========================= */
+  function isOwner() {
+    return state.session && state.session.role === 'owner';
   }
 
-  if(d.profit / d.totalIncome < 0.1){
-    console.warn("⚠ Margin sangat kecil");
+  function isAdmin() {
+    return state.session && (state.session.role === 'admin' || state.session.role === 'owner');
   }
-}
+
+  /* =========================
+   * OWNER DASHBOARD CORE
+   * ========================= */
+  function openOwnerDashboard() {
+    if (!isOwner()) {
+      alert('Akses ditolak');
+      return;
+    }
+
+    state.ownerDashboard.visible = true;
+    renderOwnerDashboard();
+  }
+
+  function renderOwnerDashboard() {
+    const el = document.getElementById('owner-dashboard');
+    if (!el) return;
+
+    const report = aggregate('daily');
+
+    el.style.display = 'block';
+
+    el.innerHTML = `
+      <div class="ta-owner-wrap">
+        <h2>📊 Owner Dashboard</h2>
+
+        <div class="ta-grid">
+          <div class="ta-card">Revenue<br><b>${formatRupiah(report.totalRevenue)}</b></div>
+          <div class="ta-card">Expense<br><b>${formatRupiah(report.totalExpenses)}</b></div>
+          <div class="ta-card">Net Profit<br><b>${formatRupiah(report.netRevenue)}</b></div>
+          <div class="ta-card">Transactions<br><b>${report.transactionCount}</b></div>
+        </div>
+
+        <h3>🔥 Top Produk</h3>
+        <ul>
+          ${report.variants.slice(0, 7).map(v =>
+            `<li>${v.name} — ${v.qty} cup</li>`
+          ).join('')}
+        </ul>
+
+        <h3>💳 Payment Breakdown</h3>
+        <ul>
+          ${report.payments.map(p =>
+            `<li>${p.name}: ${formatRupiah(p.amount)}</li>`
+          ).join('')}
+        </ul>
+
+        <h3>📝 Notes</h3>
+        <ul>
+          ${report.notes.slice(0, 10).map(n => `<li>${n}</li>`).join('')}
+        </ul>
+
+        <button onclick="document.getElementById('owner-dashboard').style.display='none'">
+          Close
+        </button>
+      </div>
+    `;
+  }
+
+  /* =========================
+   * UI INJECTION
+   * ========================= */
+  function injectOwnerButton() {
+    if (!isOwner()) return;
+
+    let btn = document.getElementById('btnOwnerDash');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'btnOwnerDash';
+      btn.innerText = 'Owner Dashboard';
+      btn.onclick = openOwnerDashboard;
+      document.body.appendChild(btn);
+    }
+  }
+
+  function injectDashboardContainer() {
+    if (document.getElementById('owner-dashboard')) return;
+
+    const div = document.createElement('div');
+    div.id = 'owner-dashboard';
+    div.style.display = 'none';
+    div.style.position = 'fixed';
+    div.style.top = '10%';
+    div.style.left = '10%';
+    div.style.right = '10%';
+    div.style.bottom = '10%';
+    div.style.background = '#fff';
+    div.style.zIndex = 9999;
+    div.style.overflow = 'auto';
+    div.style.padding = '20px';
+
+    document.body.appendChild(div);
+  }
+
+  /* =========================
+   * PATCH INIT HOOK
+   * ========================= */
+  function initOwnerModule() {
+    if (!state.session) return;
+
+    injectDashboardContainer();
+    injectOwnerButton();
+  }
+
+  /* =========================
+   * AUTO ATTACH
+   * ========================= */
+  const interval = setInterval(() => {
+    try {
+      if (window.state && window.state.session) {
+        initOwnerModule();
+      }
+    } catch (e) {}
+  }, 1000);
+
+})();
