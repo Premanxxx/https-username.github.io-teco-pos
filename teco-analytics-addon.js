@@ -2464,3 +2464,321 @@
   }, 1000);
 
 })();
+(function () {
+  'use strict';
+
+/* =========================
+   SAFE LAYER - NO OVERRIDE
+   ========================= */
+
+const SAFE = {
+  getState() {
+    return window.state || {};
+  },
+
+  isAdmin() {
+    const s = this.getState();
+    return s?.session?.role === 'admin' || s?.session?.role === 'owner';
+  },
+
+  isOwner() {
+    const s = this.getState();
+    return s?.session?.role === 'owner';
+  }
+};
+
+/* =========================
+   OWNER DASHBOARD (SAFE UI ONLY)
+   ========================= */
+
+function ensureOwnerUI() {
+  const state = SAFE.getState();
+  if (!state.session?.authenticated) return;
+
+  if (!SAFE.isOwner()) return;
+
+  // tombol
+  if (!document.getElementById('btnOwnerDash')) {
+    const btn = document.createElement('button');
+    btn.id = 'btnOwnerDash';
+    btn.innerText = 'Owner Dashboard';
+
+    btn.onclick = () => openOwnerSafe();
+
+    document.body.appendChild(btn);
+  }
+
+  // container
+  if (!document.getElementById('owner-dashboard')) {
+    const el = document.createElement('div');
+    el.id = 'owner-dashboard';
+
+    Object.assign(el.style, {
+      display: 'none',
+      position: 'fixed',
+      inset: '10%',
+      background: '#fff',
+      zIndex: 99999,
+      overflow: 'auto',
+      padding: '16px',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.3)'
+    });
+
+    document.body.appendChild(el);
+  }
+}
+
+/* =========================
+   SAFE DATA ACCESS (NO TOUCH CORE)
+   ========================= */
+
+function safeAggregate() {
+  try {
+    if (typeof aggregate === 'function') {
+      return aggregate('daily');
+    }
+  } catch (e) {
+    console.warn('[SAFE EXT] aggregate error', e);
+  }
+
+  return {
+    transactionCount: 0,
+    totalRevenue: 0,
+    totalExpenses: 0,
+    netRevenue: 0,
+    variants: [],
+    payments: [],
+    notes: []
+  };
+}
+
+/* =========================
+   OWNER DASHBOARD RENDER
+   ========================= */
+
+function openOwnerSafe() {
+  const state = SAFE.getState();
+  if (!state.session?.authenticated || !SAFE.isOwner()) return;
+
+  const el = document.getElementById('owner-dashboard');
+  if (!el) return;
+
+  const r = safeAggregate();
+
+  el.innerHTML = `
+    <div>
+      <h2>📊 OWNER DASHBOARD (SAFE MODE)</h2>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        <div>Revenue<br><b>${r.totalRevenue}</b></div>
+        <div>Expense<br><b>${r.totalExpenses}</b></div>
+        <div>Net<br><b>${r.netRevenue}</b></div>
+        <div>Tx<br><b>${r.transactionCount}</b></div>
+      </div>
+
+      <h3>Top Produk</h3>
+      <ul>
+        ${(r.variants || []).slice(0,5).map(v =>
+          `<li>${v.name || '-'} : ${v.qty || 0}</li>`
+        ).join('')}
+      </ul>
+
+      <button onclick="document.getElementById('owner-dashboard').style.display='none'">
+        Close
+      </button>
+    </div>
+  `;
+
+  el.style.display = 'block';
+}
+
+/* =========================
+   SAFE WHATSAPP EXTENSION (NO REPLACE)
+   ========================= */
+
+function safeWhatsAppHook() {
+  try {
+    const state = SAFE.getState();
+    if (!state.session?.authenticated) return;
+
+    // hanya extend, tidak replace buildWhatsAppMessage
+    const btn = document.querySelector('[data-teco-wa-safe]');
+    if (!btn) return;
+
+    btn.onclick = () => {
+      const base = typeof buildWhatsAppMessage === 'function'
+        ? buildWhatsAppMessage('daily')
+        : 'Laporan tidak tersedia';
+
+      const extra = `\n\n[OWNER EXT SAFE ACTIVE]`;
+
+      const url = `https://wa.me/?text=${encodeURIComponent(base + extra)}`;
+      window.open(url, '_blank');
+    };
+
+  } catch (e) {
+    console.warn('[SAFE EXT] WA hook error', e);
+  }
+}
+
+/* =========================
+   MAIN LOOP (NON-INTRUSIVE)
+   ========================= */
+
+function bootSafe() {
+  ensureOwnerUI();
+  safeWhatsAppHook();
+}
+
+setInterval(bootSafe, 1200);
+
+})();
+/**
+ * TECO SAFE AI LAYER v2
+ * NO CORE MODIFICATION
+ * READ-ONLY INTELLIGENCE OVER POS DATA
+ */
+
+(function () {
+  'use strict';
+
+  const AI = {
+    getState() {
+      return window.state || {};
+    },
+
+    safeAggregate() {
+      try {
+        if (typeof aggregate === 'function') {
+          return aggregate('daily');
+        }
+      } catch (e) {}
+
+      return {
+        transactionCount: 0,
+        totalRevenue: 0,
+        totalExpenses: 0,
+        netRevenue: 0,
+        variants: [],
+        payments: [],
+        expenses: []
+      };
+    }
+  };
+
+  /* =========================
+   * AI CORE INSIGHT ENGINE
+   * ========================= */
+
+  function calculateInsights() {
+    const r = AI.safeAggregate();
+
+    const profitMargin =
+      r.totalRevenue > 0
+        ? ((r.netRevenue / r.totalRevenue) * 100)
+        : 0;
+
+    const topProduct = (r.variants || []).reduce((max, v) =>
+      (v.qty > (max?.qty || 0) ? v : max), null
+    );
+
+    const topPayment = (r.payments || []).reduce((max, p) =>
+      (p.amount > (max?.amount || 0) ? p : max), null
+    );
+
+    const riskLevel =
+      r.netRevenue < 0 ? 'HIGH LOSS' :
+      profitMargin < 10 ? 'LOW MARGIN' :
+      'STABLE';
+
+    return {
+      profitMargin: profitMargin.toFixed(2),
+      topProduct,
+      topPayment,
+      riskLevel
+    };
+  }
+
+  /* =========================
+   * AI PANEL (SAFE UI ONLY)
+   * ========================= */
+
+  function renderAI() {
+    const state = AI.getState();
+    if (!state.session?.authenticated) return;
+
+    const isAdmin = state.session.role === 'admin' || state.session.role === 'owner';
+
+    let el = document.getElementById('teco-ai-panel');
+
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'teco-ai-panel';
+
+      Object.assign(el.style, {
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        width: '260px',
+        background: '#111',
+        color: '#fff',
+        padding: '12px',
+        borderRadius: '12px',
+        fontSize: '12px',
+        zIndex: 99998,
+        fontFamily: 'Arial'
+      });
+
+      document.body.appendChild(el);
+    }
+
+    const ins = calculateInsights();
+
+    el.innerHTML = `
+      <b>🧠 AI Insight (SAFE)</b><br><br>
+
+      Profit Margin: <b>${ins.profitMargin}%</b><br>
+      Risk Level: <b>${ins.riskLevel}</b><br><br>
+
+      Top Product:<br>
+      <b>${ins.topProduct?.name || '-'}</b><br><br>
+
+      Top Payment:<br>
+      <b>${ins.topPayment?.name || '-'}</b><br><br>
+
+      ${isAdmin ? '<small>Admin mode: extended view active</small>' : ''}
+    `;
+  }
+
+  /* =========================
+   * AI ALERT SYSTEM (READ ONLY)
+   * ========================= */
+
+  function runAlerts() {
+    const ins = calculateInsights();
+
+    if (ins.riskLevel === 'HIGH LOSS') {
+      console.warn('[TECO AI] ALERT: HIGH LOSS DETECTED');
+    }
+
+    if (parseFloat(ins.profitMargin) < 5) {
+      console.warn('[TECO AI] ALERT: CRITICAL LOW MARGIN');
+    }
+  }
+
+  /* =========================
+   * SAFE LOOP (NO CORE TOUCH)
+   * ========================= */
+
+  function bootAI() {
+    try {
+      renderAI();
+      runAlerts();
+    } catch (e) {
+      console.warn('[TECO AI] error', e);
+    }
+  }
+
+  setInterval(bootAI, 2000);
+
+})();
