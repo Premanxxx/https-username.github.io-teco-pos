@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <title>Te.Co — Laporan & Analisis Bahan</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:linear-gradient(145deg,#0f172a,#134e4a);color:#fff;display:grid;place-items:center;padding:24px}.card{width:min(720px,100%);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:28px;box-shadow:0 30px 80px rgba(0,0,0,.35);backdrop-filter:blur(10px)}h1{margin:0 0 10px;font-size:28px}p{color:#dbeafe;line-height:1.65}.hint{background:rgba(255,255,255,.09);border-radius:12px;padding:14px;margin-top:16px}.open{border:0;border-radius:12px;padding:12px 18px;background:#14b8a6;color:#042f2e;font-weight:800;cursor:pointer;font-size:15px}.open:hover{background:#2dd4bf}code{background:rgba(15,23,42,.55);padding:2px 6px;border-radius:5px}</style>
+</head>
+<body>
+  <main class="card">
+    <h1>Te.Co Analytics</h1>
+    <p>Halaman cadangan untuk membuka rekap penjualan, total cup dan varian, laporan Excel harian–bulanan, pesan WhatsApp, serta analisis pemakaian bahan.</p>
+    <button class="open" type="button" onclick="window.TeCoAnalytics && window.TeCoAnalytics.open('daily')">Buka Laporan</button>
+    <div class="hint">Simpan halaman ini pada folder yang sama dengan <code>index.html</code> dan <code>teco-analytics-addon.js</code>. Data lokal dapat dibaca karena berada pada domain GitHub Pages yang sama.</div>
+  </main>
+  <script>window.TECO_ANALYTICS_AUTO_OPEN = true;</script>
+  <script src="./teco-analytics-addon.js?v=1.0.0"></script>
+</body>
+</html>

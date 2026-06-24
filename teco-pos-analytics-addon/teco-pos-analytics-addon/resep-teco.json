@@ -1,0 +1,418 @@
+{
+  "version": "1.0.0",
+  "source": "HPP_Resep_Bahan_Penggunaan.xlsx",
+  "timezone": "Asia/Jakarta",
+  "concentrateBatchYieldMl": 1000,
+  "notes": [
+    "Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.",
+    "Cup + Tutup dihitung otomatis 1 set untuk setiap cup terjual, termasuk resep KOPI MILO yang tidak mencantumkan kemasan.",
+    "Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren."
+  ],
+  "recipes": {
+    "KONSENTRAT": [
+      {
+        "material": "Kental Manis",
+        "qty": 200.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Krimer",
+        "qty": 100.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Sirup Vanilla",
+        "qty": 100.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Robusta",
+        "qty": 45.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air",
+        "qty": 800.0,
+        "unit": "ml"
+      }
+    ],
+    "RENJANA": [
+      {
+        "material": "Konsentrat",
+        "qty": 60.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 80.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      },
+      {
+        "material": "Gula Aren",
+        "qty": 10.0,
+        "unit": "ml"
+      }
+    ],
+    "SAKALA": [
+      {
+        "material": "Konsentrat",
+        "qty": 40.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 100.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      },
+      {
+        "material": "Gula Aren",
+        "qty": 10.0,
+        "unit": "ml"
+      }
+    ],
+    "KAHWA": [
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Sirup Vanilla",
+        "qty": 5.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Fruktosa",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 130.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      },
+      {
+        "material": "Gula Aren",
+        "qty": 10.0,
+        "unit": "ml"
+      }
+    ],
+    "AMERICANO": [
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 130.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "PREMIUM SERIES (BUTTERSCOTCH, CARAMEL, HAZELNUT)": [
+      {
+        "material": "Konsentrat",
+        "qty": 40.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 100.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)": [
+      {
+        "material": "Kental Manis",
+        "qty": 20.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Bubuk Rasa",
+        "qty": 20.0,
+        "unit": "gr"
+      },
+      {
+        "material": "UHT",
+        "qty": 100.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "MATCHAPRESSO": [
+      {
+        "material": "Kental Manis",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Krimer",
+        "qty": 15.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Bubuk Rasa",
+        "qty": 18.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 80.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "MATCHA AREN": [
+      {
+        "material": "Gula Aren",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Matcha",
+        "qty": 18.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Kental Manis",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 100.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "KOPI MILO": [
+      {
+        "material": "Kental Manis",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Milo",
+        "qty": 35.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 50.0,
+        "unit": "ml"
+      }
+    ],
+    "MILO BUTTERSCOTCH, CARAMEL, HAZELNUT": [
+      {
+        "material": "Sirup",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Milo",
+        "qty": 35.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "REDBERRYCANO": [
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 20.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Raspberry",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Lemon",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 130.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "GOLDEN DRIFT": [
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 20.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Raspberry",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Leci",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 130.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "LUMA PEARL": [
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 20.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Passion Fruit",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Air Mineral",
+        "qty": 130.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "KOPSU PISTACHIO": [
+      {
+        "material": "Konsentrat",
+        "qty": 60.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Sirup Pistachio",
+        "qty": 15.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 80.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      },
+      {
+        "material": "Gula Aren",
+        "qty": 10.0,
+        "unit": "ml"
+      }
+    ]
+  }
+}
