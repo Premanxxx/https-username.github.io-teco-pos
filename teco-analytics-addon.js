@@ -2314,3 +2314,70 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
   else init();
 })();
+/***********************
+ * TECO OWNER DASHBOARD v2
+ ***********************/
+
+function getTransactions(){
+  return loadData("transactions") || [];
+}
+
+// ===== CORE METRICS =====
+function getDashboardData(){
+  let sales = getTransactions();
+  let inv = getTotalInvestment();
+
+  let totalIncome = sales.reduce((a,b)=>a + Number(b.total || 0),0);
+
+  let totalExpense =
+    inv.modalAwal +
+    inv.harian +
+    inv.mingguan +
+    inv.gaji +
+    inv.takTerduga +
+    inv.lain;
+
+  let profit = totalIncome - totalExpense;
+
+  return {
+    totalIncome,
+    totalExpense,
+    profit,
+    totalTransaksi: sales.length
+  };
+}
+function getTopProducts(){
+  let sales = getTransactions();
+  let map = {};
+
+  sales.forEach(t => {
+    (t.items || []).forEach(i => {
+      map[i.name] = (map[i.name] || 0) + i.qty;
+    });
+  });
+
+  return Object.entries(map)
+    .map(([name,qty]) => ({name,qty}))
+    .sort((a,b)=>b.qty - a.qty)
+    .slice(0,5);
+}
+function getROI(){
+  let d = getDashboardData();
+
+  let inv = getTotalInvestment().modalAwal;
+
+  if(inv === 0) return 0;
+
+  return ((d.profit / inv) * 100).toFixed(2);
+}
+function checkAlerts(){
+  let d = getDashboardData();
+
+  if(d.profit < 0){
+    console.warn("⚠ RUGI HARI INI");
+  }
+
+  if(d.profit / d.totalIncome < 0.1){
+    console.warn("⚠ Margin sangat kecil");
+  }
+}
