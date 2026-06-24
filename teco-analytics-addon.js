@@ -1,10 +1,10 @@
 /*
- * Te.Co Pandawa POS — Analytics Add-on v1.2.2
+ * Te.Co Pandawa POS — Analytics Add-on v1.2.3
  * Adds daily/monthly variant recap, WhatsApp report, Excel sheets,
  * and ingredient usage analysis based on the uploaded recipe workbook.
  *
  * Install: add before </body> in the existing index.html:
- * <script src="./teco-analytics-addon.js?v=1.2.2"></script>
+ * <script src="./teco-analytics-addon.js?v=1.2.3"></script>
  */
 (function () {
   'use strict';
@@ -12,7 +12,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
@@ -149,7 +149,8 @@
     concentrateBatchYieldMl: 1000,
     expandConcentrate: true,
     productRecipeMap: {},
-    firebaseDbUrl: FIREBASE_DB_URL
+    firebaseDbUrl: FIREBASE_DB_URL,
+    storageMode: 'auto'
   };
 
   const state = {
@@ -167,7 +168,8 @@
     loading: false,
     reloadQueued: false,
     lastLoadedAt: null,
-    lastSyncReason: ''
+    lastSyncReason: '',
+    firebaseStatus: { state: 'idle', message: 'Belum diuji', lastChecked: null }
   };
 
   let dataReloadTimer = null;
@@ -178,12 +180,43 @@
   function loadSettings() {
     try {
       const parsed = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-      return Object.assign({}, DEFAULT_SETTINGS, parsed || {}, {
+      const merged = Object.assign({}, DEFAULT_SETTINGS, parsed || {}, {
         productRecipeMap: Object.assign({}, DEFAULT_SETTINGS.productRecipeMap, parsed.productRecipeMap || {})
       });
+      if (!['auto', 'firebase', 'local'].includes(merged.storageMode)) merged.storageMode = 'auto';
+      return merged;
     } catch (_) {
       return Object.assign({}, DEFAULT_SETTINGS);
     }
+  }
+
+  function getStorageMode() {
+    return ['auto', 'firebase', 'local'].includes(state.settings.storageMode) ? state.settings.storageMode : 'auto';
+  }
+
+  function storageModeLabel(mode) {
+    const value = mode || getStorageMode();
+    if (value === 'local') return 'Lokal saja';
+    if (value === 'firebase') return 'Firebase (cadangan lokal)';
+    return 'Otomatis (lokal + Firebase)';
+  }
+
+  function setFirebaseStatus(status, message) {
+    state.firebaseStatus = {
+      state: status || 'idle',
+      message: String(message || ''),
+      lastChecked: new Date()
+    };
+  }
+
+  function firebaseStatusText() {
+    const info = state.firebaseStatus || {};
+    const checked = info.lastChecked ? ` • ${jakartaDateTime(info.lastChecked)}` : '';
+    if (getStorageMode() === 'local') return 'Dinonaktifkan karena mode Lokal saja';
+    if (info.state === 'connected') return `Terhubung — ${info.message || 'Firebase dapat diakses'}${checked}`;
+    if (info.state === 'fallback') return `Menggunakan cadangan lokal — ${info.message || 'Firebase tidak tersedia'}${checked}`;
+    if (info.state === 'failed') return `Gagal — ${info.message || 'Firebase tidak dapat diakses'}${checked}`;
+    return `${info.message || 'Belum diuji'}${checked}`;
   }
 
   function saveSettings() {
@@ -756,13 +789,13 @@
     return response.json();
   }
 
-  async function fetchFirebaseData() {
+  async function fetchFirebaseData(customDbUrl) {
     const sdkDatabases = getCompatFirebaseDatabases();
     if (sdkDatabases.length) {
       try { return await fetchFirebaseSdkData(); } catch (_) { /* lanjut ke REST */ }
     }
 
-    const dbUrl = String(state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
+    const dbUrl = String(customDbUrl || state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
     try {
       const data = await fetchJson(`${dbUrl}/.json`);
       return firebaseDataResult(data || {}, 'Firebase Realtime Database');
@@ -834,25 +867,53 @@
     const sources = [];
 
     try {
+      const mode = getStorageMode();
       const local = scanLocalStorage();
-      all.push(...local.txs);
-      allExpenses.push(...local.expenses);
-      sources.push(...local.sources);
-
       const globals = scanKnownGlobals();
-      all.push(...globals.txs);
-      allExpenses.push(...globals.expenses);
-      sources.push(...globals.sources);
-
       let cloudAdjustments = [];
-      try {
-        const firebase = await fetchFirebaseData();
-        all.push(...firebase.txs);
-        allExpenses.push(...(firebase.expenses || []));
-        sources.push(...firebase.sources);
-        cloudAdjustments = firebase.adjustments || [];
-      } catch (err) {
-        state.loadErrors.push(`Firebase: ${err && err.message ? err.message : err}`);
+      let firebase = null;
+      let firebaseError = null;
+
+      if (mode !== 'local') {
+        try {
+          firebase = await fetchFirebaseData();
+          const cloudCount = (firebase.txs || []).length;
+          setFirebaseStatus('connected', `${cloudCount} transaksi cloud ditemukan`);
+        } catch (err) {
+          firebaseError = err;
+          const message = err && err.message ? err.message : String(err);
+          setFirebaseStatus('fallback', message);
+          state.loadErrors.push(`Firebase gagal; cadangan lokal dipakai: ${message}`);
+        }
+      } else {
+        setFirebaseStatus('disabled', 'Mode Lokal saja aktif');
+      }
+
+      if (mode === 'auto' || mode === 'local') {
+        all.push(...local.txs, ...globals.txs);
+        allExpenses.push(...local.expenses, ...globals.expenses);
+        sources.push(...local.sources, ...globals.sources);
+        if (firebase) {
+          all.push(...firebase.txs);
+          allExpenses.push(...(firebase.expenses || []));
+          sources.push(...firebase.sources);
+          cloudAdjustments = firebase.adjustments || [];
+        }
+      } else if (mode === 'firebase') {
+        if (firebase && ((firebase.txs || []).length || (firebase.expenses || []).length || (firebase.adjustments || []).length)) {
+          all.push(...firebase.txs, ...globals.txs);
+          allExpenses.push(...(firebase.expenses || []), ...globals.expenses);
+          sources.push(...firebase.sources, ...globals.sources);
+          cloudAdjustments = firebase.adjustments || [];
+        } else {
+          all.push(...local.txs, ...globals.txs);
+          allExpenses.push(...local.expenses, ...globals.expenses);
+          sources.push(...local.sources, ...globals.sources);
+          if (!firebaseError) {
+            setFirebaseStatus('fallback', 'Firebase tidak berisi data laporan; cadangan lokal dipakai');
+            state.loadErrors.push('Firebase tidak berisi data laporan; cadangan lokal dipakai');
+          }
+        }
       }
 
       state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
@@ -887,7 +948,19 @@
     }, Number.isFinite(delay) ? delay : 450);
   }
 
+  function clearFirebaseRealtimeSync() {
+    firebaseRealtimeHandlers.forEach(({ ref, handler }) => {
+      try { if (ref && typeof ref.off === 'function') ref.off('value', handler); } catch (_) { /* noop */ }
+    });
+    firebaseRealtimeHandlers = [];
+    firebaseRealtimeInstalled = false;
+  }
+
   function installFirebaseRealtimeSync() {
+    if (getStorageMode() === 'local') {
+      clearFirebaseRealtimeSync();
+      return;
+    }
     if (firebaseRealtimeInstalled) return;
     const databases = getCompatFirebaseDatabases();
     if (!databases.length) return;
@@ -1216,7 +1289,7 @@
       .ta-cards{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}.ta-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px}.ta-card span{display:block;color:#64748b;font-size:11px}.ta-card strong{font-size:20px;display:block;margin-top:5px}
       .ta-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.ta-panel{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}.ta-panel h3{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid #e2e8f0;background:#f8fafc}.ta-panel .ta-pad{padding:12px}
       .ta-table-wrap{overflow:auto;max-height:430px}.ta-table{width:100%;border-collapse:collapse;font-size:12px}.ta-table th{position:sticky;top:0;background:#f1f5f9;color:#334155;text-align:left;padding:9px;border-bottom:1px solid #cbd5e1;z-index:1}.ta-table td{padding:8px 9px;border-bottom:1px solid #e2e8f0;vertical-align:top}.ta-table tr:hover td{background:#f8fafc}.ta-num{text-align:right;white-space:nowrap}.ta-muted{color:#64748b}.ta-badge{display:inline-block;padding:3px 7px;border-radius:999px;background:#dcfce7;color:#166534;font-size:10px;font-weight:700}.ta-badge.miss{background:#fee2e2;color:#991b1b}
-      .ta-map-select{width:100%;min-width:190px;border:1px solid #cbd5e1;border-radius:7px;padding:6px;background:#fff}.ta-adjust-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.ta-adjust-form .wide{grid-column:span 2}.ta-lock{font-size:12px;line-height:1.5;color:#7c2d12;background:#ffedd5;border:1px solid #fdba74;padding:10px;border-radius:9px}.ta-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ta-settings .ta-field input{width:100%;box-sizing:border-box}.ta-note{font-size:12px;line-height:1.5;color:#475569;background:#fef3c7;border:1px solid #fde68a;padding:10px;border-radius:9px}.ta-recipe{margin-bottom:12px}.ta-recipe h4{margin:0 0 6px;font-size:13px}.ta-recipe ul{margin:0;padding-left:18px;color:#475569;font-size:12px}
+      .ta-map-select{width:100%;min-width:190px;border:1px solid #cbd5e1;border-radius:7px;padding:6px;background:#fff}.ta-adjust-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.ta-adjust-form .wide{grid-column:span 2}.ta-lock{font-size:12px;line-height:1.5;color:#7c2d12;background:#ffedd5;border:1px solid #fdba74;padding:10px;border-radius:9px}.ta-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ta-settings .ta-field input,.ta-settings .ta-field select{width:100%;box-sizing:border-box}.ta-note{font-size:12px;line-height:1.5;color:#475569;background:#fef3c7;border:1px solid #fde68a;padding:10px;border-radius:9px}.ta-recipe{margin-bottom:12px}.ta-recipe h4{margin:0 0 6px;font-size:13px}.ta-recipe ul{margin:0;padding-left:18px;color:#475569;font-size:12px}
       .ta-toast{position:fixed;left:50%;bottom:25px;transform:translateX(-50%);z-index:2147483200;background:#0f172a;color:#fff;padding:10px 14px;border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.3);font:600 13px system-ui;opacity:0;pointer-events:none;transition:.2s}.ta-toast.show{opacity:1}
       @media(max-width:800px){.ta-adjust-form{grid-template-columns:1fr}.ta-adjust-form .wide{grid-column:auto}.ta-report-entry-card{align-items:stretch;flex-direction:column}.ta-report-open{width:100%}.ta-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.ta-grid{grid-template-columns:1fr}.ta-actions{margin-left:0;width:100%}.ta-settings{grid-template-columns:1fr}.ta-toolbar{align-items:stretch}.ta-field{flex:1;min-width:130px}#tecoAnalyticsModal{height:96vh;border-radius:13px}.ta-head{padding:13px}.ta-body{padding:11px}}
     `;
@@ -1652,7 +1725,7 @@
     if (!content) return;
     syncControls();
     if (state.loading) {
-      renderStatus('Memuat transaksi dari penyimpanan lokal dan Firebase…');
+      renderStatus(`Memuat transaksi — mode ${storageModeLabel()}…`);
       return;
     }
     if (state.activeTab === 'daily' || state.activeTab === 'monthly') renderReport(state.activeTab);
@@ -1717,14 +1790,22 @@
   }
 
   async function syncAdjustmentToCloud(row, remove) {
+    if (getStorageMode() === 'local') return { skipped: true, reason: 'Mode Lokal saja' };
     const dbUrl = String(state.settings.firebaseDbUrl || FIREBASE_DB_URL).replace(/\/$/, '');
     const id = encodeURIComponent(String(row.id));
-    const response = await fetch(`${dbUrl}/analyticsAdjustments/${id}.json`, {
-      method: remove ? 'DELETE' : 'PUT',
-      headers: remove ? undefined : { 'Content-Type': 'application/json' },
-      body: remove ? undefined : JSON.stringify(row)
-    });
-    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+    try {
+      const response = await fetch(`${dbUrl}/analyticsAdjustments/${id}.json`, {
+        method: remove ? 'DELETE' : 'PUT',
+        headers: remove ? undefined : { 'Content-Type': 'application/json' },
+        body: remove ? undefined : JSON.stringify(row)
+      });
+      if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+      setFirebaseStatus('connected', 'Penyesuaian laporan berhasil disinkronkan');
+      return { skipped: false };
+    } catch (err) {
+      setFirebaseStatus('fallback', err && err.message ? err.message : String(err));
+      throw err;
+    }
   }
 
   function adjustmentId() {
@@ -1845,24 +1926,52 @@
   function renderSettings() {
     if (!isAdmin()) { setTab('adjustments'); return; }
     const content = document.getElementById('taContent');
+    const mode = getStorageMode();
+    const statusClass = state.firebaseStatus && ['failed', 'fallback'].includes(state.firebaseStatus.state) ? ' error' : '';
     content.innerHTML = `
       <div class="ta-settings">
         <label class="ta-field"><span>Nomor WhatsApp Owner</span><input id="taOwnerWa" type="tel" placeholder="Contoh: 628123456789" value="${escapeHtml(state.settings.ownerWhatsApp)}"></label>
         <label class="ta-field"><span>Hasil 1 Batch Konsentrat (ml)</span><input id="taYield" type="number" min="1" step="1" value="${escapeHtml(state.settings.concentrateBatchYieldMl)}"></label>
+        <label class="ta-field"><span>Sumber/Penyimpanan Data</span><select id="taStorageMode"><option value="auto"${mode === 'auto' ? ' selected' : ''}>Otomatis — gabungkan lokal dan Firebase</option><option value="firebase"${mode === 'firebase' ? ' selected' : ''}>Firebase — cadangan lokal jika gagal</option><option value="local"${mode === 'local' ? ' selected' : ''}>Lokal saja — tanpa Firebase</option></select></label>
         <label class="ta-field"><span>URL Firebase Realtime Database</span><input id="taFirebaseUrl" type="url" value="${escapeHtml(state.settings.firebaseDbUrl)}"></label>
         <label class="ta-field"><span>Ekspansi Konsentrat</span><select id="taExpand"><option value="yes"${state.settings.expandConcentrate ? ' selected' : ''}>Uraikan menjadi bahan baku</option><option value="no"${!state.settings.expandConcentrate ? ' selected' : ''}>Tampilkan sebagai Konsentrat</option></select></label>
       </div>
+      <div class="ta-note" style="margin-top:12px"><strong>Pilihan penyimpanan:</strong> Otomatis menggabungkan data aplikasi dan Firebase. Firebase menjadikan cloud sebagai sumber utama tetapi tetap memakai data lokal bila cloud gagal. Lokal saja menonaktifkan semua permintaan Firebase dan menyimpan penyesuaian hanya pada perangkat ini.</div>
+      <div id="taFirebaseStatus" class="ta-status${statusClass}" style="margin-top:12px"><strong>Status Firebase:</strong> ${escapeHtml(firebaseStatusText())}</div>
       <div class="ta-note" style="margin-top:12px">File resep tidak mencantumkan hasil akhir satu batch konsentrat. Nilai awal ditetapkan 1.000 ml dan dapat disesuaikan di sini agar kalkulasi bahan baku tepat dengan praktik produksi.</div>
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button id="taSaveSettings" class="ta-btn primary" type="button">Simpan Pengaturan</button><button id="taResetMapping" class="ta-btn warn" type="button">Reset Mapping Manual</button></div>
-      <div class="ta-status" style="margin-top:12px">Sumber data terakhir: ${escapeHtml(sourceSummary())}. Terakhir dimuat: ${state.lastLoadedAt ? escapeHtml(jakartaDateTime(state.lastLoadedAt)) : 'belum pernah'}.</div>`;
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button id="taSaveSettings" class="ta-btn primary" type="button">Simpan Pengaturan</button><button id="taTestFirebase" class="ta-btn" type="button">Uji Firebase</button><button id="taResetMapping" class="ta-btn warn" type="button">Reset Mapping Manual</button></div>
+      <div class="ta-status" style="margin-top:12px">Mode aktif: <strong>${escapeHtml(storageModeLabel())}</strong>. Sumber data terakhir: ${escapeHtml(sourceSummary())}. Terakhir dimuat: ${state.lastLoadedAt ? escapeHtml(jakartaDateTime(state.lastLoadedAt)) : 'belum pernah'}.</div>`;
     content.querySelector('#taSaveSettings').addEventListener('click', () => {
+      const previousMode = getStorageMode();
       state.settings.ownerWhatsApp = content.querySelector('#taOwnerWa').value.trim();
       state.settings.concentrateBatchYieldMl = Math.max(1, toNumber(content.querySelector('#taYield').value) || 1000);
+      state.settings.storageMode = content.querySelector('#taStorageMode').value;
       state.settings.firebaseDbUrl = content.querySelector('#taFirebaseUrl').value.trim() || FIREBASE_DB_URL;
       state.settings.expandConcentrate = content.querySelector('#taExpand').value === 'yes';
       saveSettings();
-      toast('Pengaturan disimpan');
+      if (state.settings.storageMode === 'local') clearFirebaseRealtimeSync();
+      else if (previousMode === 'local') firebaseRealtimeInstalled = false;
+      toast(`Pengaturan disimpan — ${storageModeLabel()}`);
+      loadTransactions({ silent: true, reason: 'perubahan mode penyimpanan' });
       renderSettings();
+    });
+    content.querySelector('#taTestFirebase').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const url = content.querySelector('#taFirebaseUrl').value.trim() || FIREBASE_DB_URL;
+      button.disabled = true;
+      button.textContent = 'Menguji…';
+      try {
+        const result = await fetchFirebaseData(url);
+        const count = (result.txs || []).length;
+        setFirebaseStatus('connected', `Koneksi berhasil; ${count} transaksi ditemukan`);
+        toast('Firebase berhasil terhubung');
+      } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        setFirebaseStatus('failed', message);
+        toast('Firebase gagal; pilih Lokal saja atau periksa URL/rules');
+      } finally {
+        renderSettings();
+      }
     });
     content.querySelector('#taResetMapping').addEventListener('click', () => {
       state.settings.productRecipeMap = {};

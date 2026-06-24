@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.3
+
+- Menambahkan pilihan sumber/penyimpanan data: Otomatis, Firebase dengan cadangan lokal, dan Lokal saja.
+- Mode Lokal saja melewati seluruh permintaan baca/tulis Firebase.
+- Mode Firebase otomatis memakai data lokal jika cloud gagal atau tidak memiliki data laporan.
+- Menambahkan tombol Uji Firebase pada Pengaturan Admin.
+- Menambahkan status koneksi Firebase beserta waktu pemeriksaan terakhir.
+- Penyesuaian laporan tetap disimpan lokal sebelum sinkronisasi cloud dilakukan.
+- Listener Firebase realtime dilepas saat pengguna memilih mode Lokal saja.
+
 ## v1.2.2
 
 - Menyinkronkan laporan langsung dengan sumber transaksi internal aplikasi POS.

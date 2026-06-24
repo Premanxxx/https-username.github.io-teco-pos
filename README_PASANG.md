@@ -1,4 +1,4 @@
-# Te.Co POS — Analytics Add-on v1.2.2
+# Te.Co POS — Analytics Add-on v1.2.3
 
 Add-on ini menempatkan fitur **Analisis Penjualan & Bahan** di dalam tab **Laporan** aplikasi Te.Co POS. Fitur tidak muncul pada halaman login dan otomatis ditutup saat pengguna logout.
 
@@ -40,7 +40,7 @@ Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebaga
 3. Buka `index.html` dan pastikan baris berikut berada tepat sebelum `</body>`:
 
 ```html
-<script src="./teco-analytics-addon.js?v=1.2.2"></script>
+<script src="./teco-analytics-addon.js?v=1.2.3"></script>
 ```
 
 4. Hapus baris pemanggilan add-on versi lama bila ada, supaya file tidak dimuat dua kali.
@@ -49,7 +49,7 @@ Penyesuaian laporan tidak mengubah transaksi asli. Nilai koreksi disimpan sebaga
 
 ## Sinkronisasi dengan penjualan
 
-Versi 1.2.2 membaca data dari beberapa jalur sekaligus agar laporan mengikuti transaksi POS:
+Versi 1.2.3 membaca data dari beberapa jalur sekaligus agar laporan mengikuti transaksi POS:
 
 - variabel transaksi internal aplikasi, termasuk variabel global `let` yang tidak tampil pada `window`;
 - localStorage/sessionStorage aplikasi;
@@ -99,7 +99,7 @@ Isi data berikut:
 - Koreksi omzet, misalnya `-10000` atau `+15000`
 - Catatan/alasan
 
-Penyesuaian disimpan pada perangkat dan dicoba disinkronkan ke Firebase pada path `analyticsAdjustments`. Bila aturan Firebase menolak penulisan, data tetap tersimpan pada perangkat tersebut dan aplikasi menampilkan pemberitahuan kegagalan sinkron.
+Penyesuaian selalu disimpan sebagai cadangan pada perangkat. Pada mode **Otomatis** dan **Firebase**, add-on juga mencoba menyinkronkannya ke path `analyticsAdjustments`. Pada mode **Lokal saja**, sinkronisasi cloud dilewati. Bila aturan Firebase menolak penulisan, data tetap tersedia pada perangkat tersebut.
 
 ## Pengaturan awal Admin
 
@@ -107,8 +107,15 @@ Buka **Analisis Penjualan & Bahan → Pengaturan**, lalu periksa:
 
 1. Nomor WhatsApp owner dengan format `628xxxxxxxxxx`.
 2. Hasil satu batch konsentrat. Nilai awal `1000 ml` karena file resep tidak mencantumkan hasil akhir batch.
-3. URL Firebase Realtime Database.
-4. Mapping resep untuk produk yang belum dikenali otomatis.
+3. Pilihan **Sumber/Penyimpanan Data**:
+   - **Otomatis** — menggabungkan data aplikasi/lokal dan Firebase.
+   - **Firebase** — memakai cloud sebagai sumber utama dan otomatis beralih ke cadangan lokal bila gagal.
+   - **Lokal saja** — tidak melakukan permintaan Firebase; laporan dan penyesuaian hanya memakai perangkat aktif.
+4. URL Firebase Realtime Database bila mode Otomatis atau Firebase digunakan.
+5. Tekan **Uji Firebase** untuk melihat status koneksi dan jumlah transaksi yang ditemukan.
+6. Mapping resep untuk produk yang belum dikenali otomatis.
+
+Bila muncul pesan Firebase gagal dimuat, pilih **Lokal saja**, tekan **Simpan Pengaturan**, lalu muat ulang laporan. Penjualan yang tersedia di aplikasi, `localStorage`, dan sesi browser tetap dapat dibaca.
 
 ## Catatan keamanan
 
@@ -119,5 +126,5 @@ Pembatasan peran diterapkan pada antarmuka dan fungsi add-on. Karena aplikasi be
 - Pastikan pengguna sudah login.
 - Pastikan kartu dibuka dari tab **Laporan**, bukan dari `analytics.html` secara langsung.
 - Pastikan hanya ada satu pemanggilan `teco-analytics-addon.js`.
-- Ubah query cache menjadi `v=1.2.2`.
+- Ubah query cache menjadi `v=1.2.3`.
 - Lakukan `Ctrl + F5` atau hapus cache PWA/browser.
