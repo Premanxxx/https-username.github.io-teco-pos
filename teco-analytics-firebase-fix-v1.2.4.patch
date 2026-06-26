@@ -1,0 +1,80 @@
+diff --git a/teco-analytics-addon.js b/teco-analytics-addon.js
+--- a/teco-analytics-addon.js
++++ b/teco-analytics-addon.js
+@@
+-  const VERSION = '1.2.3';
++  const VERSION = '1.2.4';
+   const TZ = 'Asia/Jakarta';
+   const SETTINGS_KEY = 'teco_analytics_settings_v1';
+   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
+   const FIREBASE_DB_URL = 'https://teman-coffee-pandawa-default-rtdb.asia-southeast1.firebasedatabase.app';
++  const FIREBASE_REQUEST_TIMEOUT_MS = 8000;
+   const XLSX_CDN = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+@@
+   async function fetchJson(url) {
+-    const response = await fetch(url, { cache: 'no-store' });
+-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+-    return response.json();
++    const controller = new AbortController();
++    const timeoutId = setTimeout(
++      () => controller.abort(),
++      FIREBASE_REQUEST_TIMEOUT_MS
++    );
++
++    try {
++      const response = await fetch(url, {
++        cache: 'no-store',
++        signal: controller.signal,
++        headers: { Accept: 'application/json' }
++      });
++
++      if (!response.ok) throw new Error(`HTTP ${response.status}`);
++      return await response.json();
++    } catch (err) {
++      if (err && err.name === 'AbortError') {
++        throw new Error(
++          `Firebase REST timeout setelah ${Math.round(FIREBASE_REQUEST_TIMEOUT_MS / 1000)} detik`
++        );
++      }
++      throw err;
++    } finally {
++      clearTimeout(timeoutId);
++    }
+   }
+@@
+   async function loadTransactions(options) {
+     const silent = Boolean(options && options.silent);
+@@
+     const all = [];
+     const allExpenses = [];
+     const sources = [];
++    let loadSucceeded = false;
+
+     try {
+@@
+       state.sources = sources;
+       state.lastLoadedAt = new Date();
+       state.lastSyncReason = options && options.reason ? String(options.reason) : 'manual';
+-      renderAll();
+       installFirebaseRealtimeSync();
++      loadSucceeded = true;
+     } catch (err) {
+       const message = err && err.message ? err.message : String(err);
+       state.loadErrors.push(`Sinkronisasi: ${message}`);
+       console.error('[TeCo Analytics] Gagal menyinkronkan laporan:', err);
+       if (!silent) renderStatus(`Gagal menyinkronkan laporan: ${message}`, true);
+     } finally {
+       state.loading = false;
++      if (loadSucceeded) renderAll();
++
+       if (state.reloadQueued) {
+         state.reloadQueued = false;
+         scheduleDataReload('antrian perubahan', 120);
+       }
+     }
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@
+-<script src="./teco-analytics-addon.js?v=1.2.3"></script>
++<script src="./teco-analytics-addon.js?v=1.2.4"></script>
