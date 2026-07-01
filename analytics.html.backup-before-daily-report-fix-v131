@@ -15,7 +15,5 @@
     <a class="open" href="./index.html">Buka Aplikasi Utama</a>
     <div class="hint"><strong>Admin</strong> dapat mengubah mapping resep dan pengaturan analisis. <strong>Kasir</strong> hanya dapat melihat laporan serta membuat penyesuaian laporan miliknya sendiri. Data penjualan dimuat ulang otomatis setelah pembayaran. Admin juga dapat memilih mode Otomatis, Firebase, atau Lokal saja bila koneksi cloud bermasalah.</div>
   </main>
-
-<script src="./teco-analytics-addon.js?v=1.3.1"></script>
 </body>
 </html>

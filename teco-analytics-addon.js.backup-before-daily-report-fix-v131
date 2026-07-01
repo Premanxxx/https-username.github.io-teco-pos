@@ -899,14 +899,6 @@
       renderAll();
     } finally {
       state.loading = false;
-      window.__TECO_DAILY_REPORT_RENDER_FIX_V131__ = true;
-      window.requestAnimationFrame(() => {
-        try {
-          renderAll();
-        } catch (renderError) {
-          console.error('[TeCo Analytics] Gagal merender laporan harian:', renderError);
-        }
-      });
 
       if (state.reloadQueued) {
         state.reloadQueued = false;
@@ -957,26 +949,6 @@
 
     const liveState = window.__TECO_ANALYTICS_LIVE_STATE__ || {};
     window.__TECO_ANALYTICS_LIVE_STATE__ = liveState;
-
-    // Baca snapshot lama satu kali. Tidak ada request Firebase dan tidak ada spinner.
-    if (!window.__TECO_EXISTING_DATA_SEEDED_V131__) {
-      window.__TECO_EXISTING_DATA_SEEDED_V131__ = true;
-      try {
-        for (let index = 0; index < localStorage.length; index += 1) {
-          const key = localStorage.key(index);
-          if (!key) continue;
-          const rawValue = localStorage.getItem(key);
-          if (rawValue == null) continue;
-          try {
-            liveState[key] = JSON.parse(rawValue);
-          } catch (parseError) {
-            // Nilai non-JSON bukan data transaksi.
-          }
-        }
-      } catch (seedError) {
-        console.warn('[TeCo Analytics] Snapshot data lama tidak dapat dibaca:', seedError);
-      }
-    }
 
     const rememberPayload = (key, rawValue) => {
       if (!key) return;
@@ -2374,7 +2346,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '1.3.1';
+  const VERSION = '1.3.0';
 
   /* =========================
    * STATE EXTENSION
