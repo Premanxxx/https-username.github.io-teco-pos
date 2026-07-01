@@ -12,7 +12,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '2.1.0';
+  const VERSION = '1.2.3';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
@@ -243,7 +243,7 @@
         id: String(row.id),
         date: String(row.date),
         cashier: String(row.cashier),
-        variant: canonicalProductName(row.variant),
+        variant: String(row.variant),
         qtyDelta: toNumber(row.qtyDelta),
         revenueDelta: toNumber(row.revenueDelta),
         note: String(row.note || ''),
@@ -273,12 +273,6 @@
       .replace(/[^A-Za-z0-9]+/g, ' ')
       .trim()
       .toUpperCase();
-  }
-
-  function canonicalProductName(value) {
-    return String(value == null ? '' : value)
-      .replace(/\bSAKATA\b/gi, 'Sakala')
-      .trim();
   }
 
   function cashierKey(value) {
@@ -482,7 +476,7 @@
   function normalizeItem(raw) {
     raw = parseMaybeJson(raw);
     if (typeof raw === 'string' || typeof raw === 'number') {
-      const name = canonicalProductName(raw);
+      const name = String(raw).trim();
       return name ? { name, baseName: name, variant: '', qty: 1, price: 0, subtotal: 0, raw } : null;
     }
     if (Array.isArray(raw)) {
@@ -495,8 +489,7 @@
     if (!qty) qty = 1;
     if (qty <= 0) return null;
     const variant = nestedItemValue(raw, VARIANT_KEYS);
-    const canonicalBaseName = canonicalProductName(baseName);
-    let name = canonicalBaseName;
+    let name = String(baseName).trim();
     let variantText = variant == null || typeof variant === 'object' ? '' : String(variant).trim();
     const options = firstValue(raw, ['options', 'modifiers', 'customizations', 'selectedOptions']);
     if (!variantText && options && typeof options === 'object') {
@@ -514,7 +507,7 @@
     if (!subtotal && price) subtotal = price * qty;
     return {
       name,
-      baseName: canonicalProductName(baseName),
+      baseName: String(baseName).trim(),
       variant: variantText,
       qty,
       price,
@@ -710,8 +703,7 @@
     const names = [
       'transactions', 'transactionData', 'transactionsData', 'transactionHistory', 'riwayatTransaksi',
       'sales', 'salesData', 'orders', 'ordersData', 'appData', 'dbData', 'allTransactions',
-      'posData', 'appState',
-      '__TECO_ANALYTICS_LIVE_STATE__', 'storeData', 'dataStore', 'expenses', 'expensesData', 'expenseData',
+      'posData', 'appState', 'storeData', 'dataStore', 'expenses', 'expensesData', 'expenseData',
       'pengeluaran', 'dailyExpenses'
     ];
     const scanned = new Set();
@@ -856,47 +848,93 @@
     walk(root, 0);
   }
 
-  async function loadTransactions(options = {}) {
-    if (!isAuthenticated()) return;
+  async function loadTransactions(options) {
+    const silent = Boolean(options && options.silent);
+    if (!isAuthenticated()) {
+      console.warn('[TeCo Analytics] Data tidak dimuat karena pengguna belum login.');
+      return;
+    }
     if (state.loading) {
       state.reloadQueued = true;
       return;
     }
-
     state.loading = true;
     state.reloadQueued = false;
     state.loadErrors = [];
+    if (!silent) renderStatus('Memuat dan menyinkronkan data penjualan…');
+    const all = [];
+    const allExpenses = [];
+    const sources = [];
 
     try {
-      const bridge = window.__TECO_ANALYTICS_LIVE_STATE__ || {};
-      const liveData = scanKnownGlobals();
-      const transactions = [
-        ...(Array.isArray(bridge.txs) ? bridge.txs : []),
-        ...(Array.isArray(liveData.txs) ? liveData.txs : [])
-      ];
-      const expenses = [
-        ...(Array.isArray(bridge.expenses) ? bridge.expenses : []),
-        ...(Array.isArray(liveData.expenses) ? liveData.expenses : [])
-      ];
+      const mode = getStorageMode();
+      const local = scanLocalStorage();
+      const globals = scanKnownGlobals();
+      let cloudAdjustments = [];
+      let firebase = null;
+      let firebaseError = null;
 
-      state.transactions = dedupeTransactions(transactions);
-      state.expenses = dedupeExpenses(expenses);
-      state.sources = Array.isArray(bridge.sources) && bridge.sources.length
-        ? bridge.sources
-        : (liveData.sources || [{ name: 'State aplikasi aktif', count: state.transactions.length }]);
+      if (mode !== 'local') {
+        try {
+          firebase = await fetchFirebaseData();
+          const cloudCount = (firebase.txs || []).length;
+          setFirebaseStatus('connected', `${cloudCount} transaksi cloud ditemukan`);
+        } catch (err) {
+          firebaseError = err;
+          const message = err && err.message ? err.message : String(err);
+          setFirebaseStatus('fallback', message);
+          state.loadErrors.push(`Firebase gagal; cadangan lokal dipakai: ${message}`);
+        }
+      } else {
+        setFirebaseStatus('disabled', 'Mode Lokal saja aktif');
+      }
+
+      if (mode === 'auto' || mode === 'local') {
+        all.push(...local.txs, ...globals.txs);
+        allExpenses.push(...local.expenses, ...globals.expenses);
+        sources.push(...local.sources, ...globals.sources);
+        if (firebase) {
+          all.push(...firebase.txs);
+          allExpenses.push(...(firebase.expenses || []));
+          sources.push(...firebase.sources);
+          cloudAdjustments = firebase.adjustments || [];
+        }
+      } else if (mode === 'firebase') {
+        if (firebase && ((firebase.txs || []).length || (firebase.expenses || []).length || (firebase.adjustments || []).length)) {
+          all.push(...firebase.txs, ...globals.txs);
+          allExpenses.push(...(firebase.expenses || []), ...globals.expenses);
+          sources.push(...firebase.sources, ...globals.sources);
+          cloudAdjustments = firebase.adjustments || [];
+        } else {
+          all.push(...local.txs, ...globals.txs);
+          allExpenses.push(...local.expenses, ...globals.expenses);
+          sources.push(...local.sources, ...globals.sources);
+          if (!firebaseError) {
+            setFirebaseStatus('fallback', 'Firebase tidak berisi data laporan; cadangan lokal dipakai');
+            state.loadErrors.push('Firebase tidak berisi data laporan; cadangan lokal dipakai');
+          }
+        }
+      }
+
+      state.adjustments = mergeAdjustments(normalizeAdjustmentCollection(loadAdjustments()), cloudAdjustments);
+      saveAdjustments();
+      state.transactions = dedupeTransactions(all);
+      state.expenses = dedupeExpenses(allExpenses);
+      state.sources = sources;
       state.lastLoadedAt = new Date();
-      state.lastSyncReason = options.reason || 'state memori aplikasi';
-      setFirebaseStatus('disabled', 'Analisis membaca state memori aktif');
+      state.lastSyncReason = options && options.reason ? String(options.reason) : 'manual';
       renderAll();
-    } catch (error) {
-      console.error('[Te.Co Analytics] Gagal membaca state memori:', error);
-      state.loadErrors = [String(error && error.message ? error.message : error)];
-      renderAll();
+      installFirebaseRealtimeSync();
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      state.loadErrors.push(`Sinkronisasi: ${message}`);
+      console.error('[TeCo Analytics] Gagal menyinkronkan laporan:', err);
+      if (!silent) renderStatus(`Gagal menyinkronkan laporan: ${message}`, true);
     } finally {
       state.loading = false;
       if (state.reloadQueued) {
         state.reloadQueued = false;
-        window.setTimeout(() => loadTransactions({ reason: 'perubahan lanjutan' }), 60);
+        scheduleDataReload('antrian perubahan', 120);
       }
     }
   }
@@ -938,28 +976,38 @@
   }
 
   function installStorageSyncHooks() {
-    if (window.__tecoAnalyticsEventBridgeInstalled) return;
-    window.__tecoAnalyticsEventBridgeInstalled = true;
-    window.addEventListener('teco:data-changed', () => scheduleDataReload('data aktif berubah', 40));
-    window.addEventListener('teco:data-ready', () => scheduleDataReload('data aktif siap', 40));
+    if (storageHooksInstalled || typeof Storage === 'undefined') return;
+    storageHooksInstalled = true;
+    ['setItem', 'removeItem', 'clear'].forEach((methodName) => {
+      const original = Storage.prototype[methodName];
+      if (typeof original !== 'function') return;
+      Storage.prototype[methodName] = function (...args) {
+        const result = original.apply(this, args);
+        const key = String(args[0] || '');
+        if (key !== SETTINGS_KEY && key !== ADJUSTMENTS_KEY) scheduleDataReload(`storage:${key || methodName}`, 180);
+        return result;
+      };
+    });
   }
 
   function startSalesSyncMonitor() {
     installStorageSyncHooks();
-    const refresh = (reason) => scheduleDataReload(reason, 60);
-    ['teco:transaction-saved', 'teco:expense-saved', 'teco:data-changed'].forEach((eventName) => {
-      window.addEventListener(eventName, () => refresh(eventName));
+    window.addEventListener('focus', () => scheduleDataReload('fokus aplikasi', 200));
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) scheduleDataReload('aplikasi aktif', 200);
     });
     document.addEventListener('click', (event) => {
-      const target = event.target && event.target.closest
-        ? event.target.closest('button, a, [role="button"]')
-        : null;
-      if (!target) return;
-      const label = normalizeText(target.textContent || target.getAttribute('aria-label') || '');
-      if (/BAYAR|KONFIRMASI|SIMPAN|HAPUS|IMPORT|RESET|TRANSAKSI BARU|PENGELUARAN/.test(label)) {
-        refresh('aksi:' + label.slice(0, 40));
+      const target = event.target && event.target.closest ? event.target.closest('button,a,[role="button"]') : null;
+      if (!target || target.closest('#tecoAnalyticsOverlay')) return;
+      const text = normalizeText(target.textContent);
+      if (text.includes('KONFIRMASI BAYAR') || text.includes('TRANSAKSI BARU') || text === 'BAYAR SEKARANG') {
+        scheduleDataReload('transaksi penjualan', text.includes('KONFIRMASI') ? 900 : 350);
+        setTimeout(() => scheduleDataReload('verifikasi transaksi', 50), 2200);
       }
-    });
+    }, true);
+    setInterval(() => {
+      if (isAuthenticated()) scheduleDataReload('sinkron berkala', 50);
+    }, 5000);
   }
 
   function mapRecipe(productName) {

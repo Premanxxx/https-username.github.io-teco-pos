@@ -982,7 +982,7 @@ const DEFAULT_MENU = [
     // Signature Coffee
     {id:'s1',name:'Renjana',price:10000,category:'signature',emoji:'⭐',badge:'BEST SELLER',desc:'Strong coffee gula aren'},
     {id:'s2',name:'Kahwa',price:10000,category:'signature',emoji:'⭐',badge:'',desc:'Black coffee gula aren'},
-    {id:'s3',name:'Sakala',price:10000,category:'signature',emoji:'⭐',badge:'',desc:'Soft coffee gula aren'},
+    {id:'s3',name:'Sakata',price:10000,category:'signature',emoji:'⭐',badge:'',desc:'Soft coffee gula aren'},
     // Premium Coffee
     {id:'p1',name:'Caramel',price:12000,category:'premium',emoji:'💎',badge:'BEST SELLER',desc:'Kopi premium caramel'},
     {id:'p2',name:'Hazelnut',price:12000,category:'premium',emoji:'💎',badge:'',desc:'Kopi premium hazelnut'},

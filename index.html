@@ -373,7 +373,7 @@ body.pwa-mode .bottom-nav {
 <button onclick="doLogin()">Masuk</button>
 <div class="login-error" id="loginError">PIN salah atau user tidak ditemukan</div>
 </div>
-<div class="version-tag">v2.0.0 | Te.Co Pandawa POS</div>
+<div class="version-tag">v2.1.0 Sakala | Te.Co Pandawa POS</div>
 </div>
 
 <button id="installPwaBtn" onclick="installPWA()">📲 Install Aplikasi</button>
@@ -1274,7 +1274,7 @@ const DEFAULT_MENU = [
     // Signature Coffee
     {id:'s1',name:'Renjana',price:10000,category:'signature',emoji:'⭐',img:MENU_IMAGES.s1,badge:'BEST SELLER',desc:'Strong coffee gula aren'},
     {id:'s2',name:'Kahwa',price:10000,category:'signature',emoji:'⭐',img:MENU_IMAGES.s2,badge:'',desc:'Black coffee gula aren'},
-    {id:'s3',name:'Sakata',price:10000,category:'signature',emoji:'⭐',img:MENU_IMAGES.s3,badge:'',desc:'Soft coffee gula aren'},
+    {id:'s3',name:'Sakala',price:10000,category:'signature',emoji:'⭐',img:MENU_IMAGES.s3,badge:'',desc:'Soft coffee gula aren'},
     // Premium Coffee
     {id:'p1',name:'Caramel',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p1,badge:'BEST SELLER',desc:'Kopi premium caramel'},
     {id:'p2',name:'Hazelnut',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p2,badge:'',desc:'Kopi premium hazelnut'},
@@ -2801,6 +2801,9 @@ function playSound(type) {
 // ==================== START ====================
 document.addEventListener('DOMContentLoaded', init);
 </script>
-<script src="./teco-analytics-addon.js?v=1.2.3"></script>
+
+<!-- Te.Co Sakala + live analytics v2.1.0 -->
+<script src="./teco-live-data-bridge.js?v=2.1.0"></script>
+<script src="./teco-analytics-addon.js?v=2.1.0"></script>
 </body>
 </html>
