@@ -1,0 +1,34 @@
+name: Apply Te.Co Sakala Recovery Fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Apply patch
+        run: python apply_teco_v2_sakala_recovery.py
+
+      - name: Commit patched files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html teco-analytics-addon.js teco-live-data-bridge.js analytics.html pos_app_pwa.html resep-teco.json README.md 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan baru."
+          else
+            git commit -m "Fix Sakala analytics and recover legacy data"
+            git push
+          fi
