@@ -218,3 +218,155 @@ body.dark .teco-native-controls {
 @media (max-width: 1050px) {
   .teco-native-cards { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
 }
+
+
+.teco-native-controls button.admin-edit {
+  border-color: #7c3aed;
+  background: #7c3aed;
+}
+.teco-native-adjustments { margin-top: 12px; }
+.teco-native-panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+.teco-native-panel-title h4 { border: 0; background: transparent; }
+.teco-native-mini {
+  margin: 6px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.teco-native-mini.danger { background: #dc2626; }
+.teco-native-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  overflow: auto;
+  padding: 18px;
+  background: rgba(15, 23, 42, .7);
+}
+.teco-native-modal.active { display: block; }
+.teco-native-modal-card {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+.teco-native-modal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.teco-native-modal-head h3 { margin: 0; }
+.teco-native-modal-head p { margin: 5px 0 0; color: #64748b; font-size: 12px; }
+.teco-native-modal-head > button {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+.teco-native-admin-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.teco-native-admin-tabs button,
+.teco-native-editor-toolbar button,
+.teco-native-form-actions button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  font-weight: 800;
+  cursor: pointer;
+}
+.teco-native-admin-tabs button.active,
+.teco-native-form-actions button:not(.secondary) {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+.teco-native-admin-section.hidden { display: none; }
+.teco-native-help { color: #64748b; font-size: 12px; }
+.teco-native-admin-section input,
+.teco-native-admin-section select,
+.teco-native-admin-section textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+.teco-native-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+.teco-native-editor-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+.teco-native-form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.teco-native-adjustment-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.teco-native-adjustment-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+.teco-native-adjustment-form .wide { grid-column: 1 / -1; }
+body.dark-mode .teco-native-modal-card,
+body.dark .teco-native-modal-card {
+  background: #111827;
+  color: #f8fafc;
+}
+@media (max-width: 760px) {
+  .teco-native-modal { padding: 6px; }
+  .teco-native-modal-card { padding: 10px; border-radius: 10px; }
+  .teco-native-adjustment-form { grid-template-columns: 1fr; }
+  .teco-native-adjustment-form .wide { grid-column: auto; }
+}

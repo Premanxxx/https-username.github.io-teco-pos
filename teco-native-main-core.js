@@ -1,10 +1,12 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
+  const ADMIN_PIN = '0000';
+  const CONFIG_KEY = 'nativeReportConfig';
 
   const state = {
     mode: 'daily',
@@ -15,7 +17,11 @@
     monthTouched: false,
     cachedRoot: null,
     renderTimer: null,
-    observer: null
+    observer: null,
+    session: { role: 'cashier', name: '' },
+    editorTab: 'variants',
+    selectedRecipe: '',
+    adjustmentEditId: ''
   };
 
   const TX_ITEM_KEYS = [
@@ -65,6 +71,144 @@
     'amount', 'nominal', 'total', 'value', 'nilai', 'biaya',
     'expenseAmount', 'expense_amount'
   ];
+
+  function deepClone(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (_) {
+      return value;
+    }
+  }
+
+  function defaultNativeConfig() {
+    return {
+      version: 1,
+      variantOverrides: {},
+      recipes: {},
+      concentrateYield: 0,
+      adjustments: []
+    };
+  }
+
+  function mergeNativeConfig(raw) {
+    const base = defaultNativeConfig();
+    raw = parseMaybeJson(raw) || {};
+    return {
+      version: 1,
+      variantOverrides: raw.variantOverrides && typeof raw.variantOverrides === 'object'
+        ? raw.variantOverrides
+        : {},
+      recipes: raw.recipes && typeof raw.recipes === 'object'
+        ? raw.recipes
+        : {},
+      concentrateYield: toNumber(raw.concentrateYield),
+      adjustments: Array.isArray(raw.adjustments) ? raw.adjustments : []
+    };
+  }
+
+  function readNativeConfig(root) {
+    return mergeNativeConfig(root && root[CONFIG_KEY]);
+  }
+
+  function visibleElement(element) {
+    if (!element) return false;
+    const style = window.getComputedStyle(element);
+    return style.display !== 'none' && style.visibility !== 'hidden' && element.offsetParent !== null;
+  }
+
+  function sessionFromObject(root) {
+    const sessionKeys = [
+      'currentUser', 'current_user', 'loggedInUser', 'logged_in_user',
+      'activeUser', 'active_user', 'currentCashier', 'current_cashier',
+      'authUser', 'auth_user', 'session', 'loginSession'
+    ];
+    const seen = new WeakSet();
+
+    function normalizeIdentity(value) {
+      value = parseMaybeJson(value);
+      if (!value) return null;
+      if (typeof value === 'string') {
+        const name = canonical(value);
+        if (/^admin$/i.test(name)) return { role: 'admin', name: 'Admin' };
+        if (/^kasir\s*\d+$/i.test(name)) return { role: 'cashier', name };
+        return null;
+      }
+      if (typeof value !== 'object') return null;
+      const name = canonical(first(value, [
+        'name', 'nama', 'username', 'userName', 'displayName',
+        'cashier', 'kasir', 'label'
+      ]));
+      const role = canonical(first(value, ['role', 'type', 'level', 'akses']));
+      if (/admin/i.test(role) || /^admin$/i.test(name)) {
+        return { role: 'admin', name: name || 'Admin' };
+      }
+      if (/cashier|kasir/i.test(role) || /^kasir\s*\d+$/i.test(name)) {
+        return { role: 'cashier', name: name || 'Kasir' };
+      }
+      return null;
+    }
+
+    function walk(node, depth) {
+      node = parseMaybeJson(node);
+      if (!node || typeof node !== 'object' || depth > 5 || seen.has(node)) return null;
+      seen.add(node);
+      for (const key of sessionKeys) {
+        if (Object.prototype.hasOwnProperty.call(node, key)) {
+          const identity = normalizeIdentity(node[key]);
+          if (identity) return identity;
+        }
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (/users|daftaruser|accounts|menu|products|transactions|transaksi/i.test(key)) continue;
+        const identity = walk(value, depth + 1);
+        if (identity) return identity;
+      }
+      return null;
+    }
+    return walk(root, 0);
+  }
+
+  function sessionFromDom() {
+    const selectors = [
+      '#currentUser', '#current-user', '#userBadge', '#user-badge',
+      '#currentCashier', '#current-cashier', '.current-user', '.user-badge',
+      '.current-cashier', '.topbar .badge', '.app-header .badge',
+      'header .badge', '.header .badge', '.top-header span', '.navbar span'
+    ];
+    const candidates = [];
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element) => candidates.push(element));
+    });
+    for (const element of candidates) {
+      if (!visibleElement(element)) continue;
+      const text = canonical(element.textContent);
+      if (/^admin$/i.test(text)) return { role: 'admin', name: 'Admin' };
+      if (/^kasir\s*\d+$/i.test(text)) return { role: 'cashier', name: text };
+    }
+    return null;
+  }
+
+  function detectSession(root) {
+    const identity = sessionFromDom() || sessionFromObject(root);
+    if (identity) state.session = identity;
+    return state.session;
+  }
+
+  function isAdmin() {
+    return state.session && state.session.role === 'admin';
+  }
+
+  function ensureAdmin() {
+    detectSession(getPrimaryRoot());
+    if (isAdmin()) return true;
+    const pin = window.prompt('Masukkan PIN admin:');
+    if (pin === ADMIN_PIN) {
+      state.session = { role: 'admin', name: 'Admin' };
+      return true;
+    }
+    if (pin !== null) alert('PIN admin salah.');
+    return false;
+  }
 
   function parseMaybeJson(value) {
     if (typeof value !== 'string') return value;
@@ -704,23 +848,54 @@
     };
   }
 
-  const RECIPE_DATA = normalizeRecipes(RECIPES_RAW);
+  const BASE_RECIPE_DATA = normalizeRecipes(RECIPES_RAW);
+  let runtimeConfig = defaultNativeConfig();
+  let runtimeRecipeData = deepClone(BASE_RECIPE_DATA);
 
-  function findRecipe(productName) {
+  function refreshRuntimeConfig(root) {
+    runtimeConfig = readNativeConfig(root || getPrimaryRoot());
+    const mergedRecipes = deepClone(BASE_RECIPE_DATA.recipes || {});
+    Object.entries(runtimeConfig.recipes || {}).forEach(([name, rows]) => {
+      const normalizedRows = asArray(rows).map((row) => ({
+        material: canonical(first(row, ['material', 'bahan', 'name', 'nama'])),
+        qty: toNumber(first(row, ['qty', 'quantity', 'jumlah', 'amount', 'takaran'])),
+        unit: canonical(first(row, ['unit', 'satuan']) || 'unit')
+      })).filter((row) => row.material && row.qty > 0);
+      if (normalizedRows.length) mergedRecipes[keyText(name)] = normalizedRows;
+    });
+    runtimeRecipeData = {
+      recipes: mergedRecipes,
+      concentrateYield: runtimeConfig.concentrateYield > 0
+        ? runtimeConfig.concentrateYield
+        : BASE_RECIPE_DATA.concentrateYield
+    };
+    return runtimeConfig;
+  }
+
+  function variantOverride(productName) {
+    return runtimeConfig.variantOverrides[keyText(productName)] || {};
+  }
+
+  function findRecipe(productName, forcedRecipeKey) {
     const key = keyText(productName);
-    if (!key) return null;
+    const forcedKey = keyText(forcedRecipeKey);
+    if (!key && !forcedKey) return null;
 
-    if (RECIPE_DATA.recipes[key]) {
-      return { name: key, rows: RECIPE_DATA.recipes[key] };
+    if (forcedKey && runtimeRecipeData.recipes[forcedKey]) {
+      return { name: forcedKey, rows: runtimeRecipeData.recipes[forcedKey] };
     }
 
-    const directKeys = Object.keys(RECIPE_DATA.recipes)
+    if (runtimeRecipeData.recipes[key]) {
+      return { name: key, rows: runtimeRecipeData.recipes[key] };
+    }
+
+    const directKeys = Object.keys(runtimeRecipeData.recipes)
       .filter((recipeKey) => recipeKey !== 'KONSENTRAT')
       .sort((a, b) => b.length - a.length);
 
     for (const recipeKey of directKeys) {
       if (key.includes(recipeKey) || recipeKey.includes(key)) {
-        return { name: recipeKey, rows: RECIPE_DATA.recipes[recipeKey] };
+        return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
       }
     }
 
@@ -728,27 +903,27 @@
       /\bMILO\b/.test(key) &&
       /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key)
     ) {
-      const recipeKey = Object.keys(RECIPE_DATA.recipes)
+      const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('MILO') && candidate.includes('BUTTERSCOTCH'));
-      if (recipeKey) return { name: recipeKey, rows: RECIPE_DATA.recipes[recipeKey] };
+      if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
     }
 
     if (
       /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key) &&
       !/\bMILO\b/.test(key)
     ) {
-      const recipeKey = Object.keys(RECIPE_DATA.recipes)
+      const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('PREMIUM SERIES'));
-      if (recipeKey) return { name: recipeKey, rows: RECIPE_DATA.recipes[recipeKey] };
+      if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
     }
 
     if (
       /(MATCHA|CHOCO|TARO|RED ?VELVET)/.test(key) &&
       !/(MATCHAPRESSO|MATCHA AREN)/.test(key)
     ) {
-      const recipeKey = Object.keys(RECIPE_DATA.recipes)
+      const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('NON COFFEE SERIES'));
-      if (recipeKey) return { name: recipeKey, rows: RECIPE_DATA.recipes[recipeKey] };
+      if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
     }
 
     return null;
@@ -759,31 +934,49 @@
 
     transactions.forEach((transaction) => {
       transaction.items.forEach((item) => {
-        const name = canonical(item.name);
+        const sourceName = canonical(item.name);
+        const override = variantOverride(sourceName);
+        const name = canonical(override.displayName || sourceName);
+        const multiplier = toNumber(override.cupMultiplier) > 0
+          ? toNumber(override.cupMultiplier)
+          : 1;
+        const quantity = toNumber(item.qty) * multiplier;
         const key = keyText(name);
 
         if (!map.has(key)) {
           map.set(key, {
             name,
             qty: 0,
-            revenue: 0
+            revenue: 0,
+            recipeKey: canonical(override.recipeKey || ''),
+            sourceNames: new Set()
           });
         }
 
         const row = map.get(key);
-        row.qty += toNumber(item.qty);
+        row.qty += quantity;
         row.revenue += toNumber(item.subtotal);
+        if (override.recipeKey) row.recipeKey = canonical(override.recipeKey);
+        row.sourceNames.add(sourceName);
       });
     });
 
-    return Array.from(map.values()).sort((a, b) => b.qty - a.qty);
+    return Array.from(map.values())
+      .map((row) => ({
+        name: row.name,
+        qty: row.qty,
+        revenue: row.revenue,
+        recipeKey: row.recipeKey,
+        sourceNames: Array.from(row.sourceNames)
+      }))
+      .sort((a, b) => b.qty - a.qty);
   }
 
   function aggregateMaterials(products) {
     const materials = new Map();
     const unmapped = [];
-    const concentrateRecipe = RECIPE_DATA.recipes.KONSENTRAT || [];
-    const concentrateYield = RECIPE_DATA.concentrateYield || 1000;
+    const concentrateRecipe = runtimeRecipeData.recipes.KONSENTRAT || [];
+    const concentrateYield = runtimeRecipeData.concentrateYield || 1000;
     let concentrateMl = 0;
 
     function addMaterial(material, qty, unit, productName, kind) {
@@ -807,7 +1000,7 @@
     }
 
     products.forEach((product) => {
-      const recipe = findRecipe(product.name);
+      const recipe = findRecipe(product.name, product.recipeKey);
 
       if (!recipe) {
         unmapped.push(product.name);
@@ -871,6 +1064,65 @@
       concentrateYield,
       unmapped: Array.from(new Set(unmapped)).sort()
     };
+  }
+
+  function writePrimaryRoot(root) {
+    state.cachedRoot = root;
+    window.__TECO_NATIVE_DATA__ = root;
+    try {
+      localStorage.setItem(PRIMARY_STORAGE_KEY, JSON.stringify(root));
+    } catch (error) {
+      console.error('[Te.Co Native] Gagal menyimpan konfigurasi:', error);
+      alert('Konfigurasi tidak dapat disimpan di browser ini.');
+      return false;
+    }
+    window.dispatchEvent(new CustomEvent('teco:data-changed', {
+      detail: { reason: 'native-report-config', version: VERSION }
+    }));
+    return true;
+  }
+
+  function saveNativeConfig(config) {
+    const root = getPrimaryRoot();
+    root[CONFIG_KEY] = mergeNativeConfig(config);
+    if (!writePrimaryRoot(root)) return false;
+    refreshRuntimeConfig(root);
+    return true;
+  }
+
+  function adjustmentMatches(adjustment, mode, period, cashier) {
+    const date = canonical(adjustment.date);
+    const periodMatch = mode === 'daily'
+      ? date === period
+      : date.slice(0, 7) === period;
+    const cashierMatch = cashier === 'ALL'
+      || cashierKey(adjustment.cashier) === cashierKey(cashier)
+      || cashierKey(adjustment.cashier) === 'SEMUA';
+    return periodMatch && cashierMatch;
+  }
+
+  function reportAdjustments(mode, period, cashier) {
+    return (runtimeConfig.adjustments || [])
+      .filter((row) => adjustmentMatches(row, mode, period, cashier))
+      .map((row) => ({
+        id: canonical(row.id),
+        date: canonical(row.date),
+        cashier: canonical(row.cashier || 'Semua'),
+        cupDelta: toNumber(row.cupDelta),
+        revenueDelta: toNumber(row.revenueDelta),
+        expenseDelta: toNumber(row.expenseDelta),
+        note: canonical(row.note),
+        updatedBy: canonical(row.updatedBy || 'Admin')
+      }));
+  }
+
+  function adjustmentTotals(rows) {
+    return rows.reduce((total, row) => {
+      total.cup += toNumber(row.cupDelta);
+      total.revenue += toNumber(row.revenueDelta);
+      total.expense += toNumber(row.expenseDelta);
+      return total;
+    }, { cup: 0, revenue: 0, expense: 0 });
   }
 
   function cashierKey(value) {
@@ -1024,7 +1276,7 @@
 
   function productRows(products) {
     if (!products.length) {
-      return '<tr><td colspan="4" class="teco-native-empty">Belum ada produk terjual pada periode ini.</td></tr>';
+      return '<tr><td colspan="5" class="teco-native-empty">Belum ada produk terjual pada periode ini.</td></tr>';
     }
 
     return products.map((product, index) => `
@@ -1033,6 +1285,7 @@
         <td>${escapeHtml(product.name)}</td>
         <td class="teco-native-number">${formatQuantity(product.qty)}</td>
         <td class="teco-native-number">${formatMoney(product.revenue)}</td>
+        <td>${escapeHtml(recipeNameForProduct(product.name, product.recipeKey))}</td>
       </tr>
     `).join('');
   }
@@ -1127,6 +1380,8 @@
 
   function buildReportData(mode, period, cashier) {
     const root = getPrimaryRoot();
+    detectSession(root);
+    refreshRuntimeConfig(root);
     const allTransactions = extractTransactions(root);
     const allExpenses = extractExpenses(root);
 
@@ -1142,9 +1397,14 @@
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
     const products = aggregateProducts(transactions);
     const materials = aggregateMaterials(products);
-    const revenue = transactions.reduce((sum, transaction) => sum + toNumber(transaction.total), 0);
-    const totalExpenses = expenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0);
-    const totalCups = products.reduce((sum, product) => sum + toNumber(product.qty), 0);
+    const adjustments = reportAdjustments(mode, period, cashier);
+    const adjustment = adjustmentTotals(adjustments);
+    const rawRevenue = transactions.reduce((sum, transaction) => sum + toNumber(transaction.total), 0);
+    const rawExpenses = expenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0);
+    const rawCups = products.reduce((sum, product) => sum + toNumber(product.qty), 0);
+    const revenue = rawRevenue + adjustment.revenue;
+    const totalExpenses = rawExpenses + adjustment.expense;
+    const totalCups = rawCups + adjustment.cup;
     const notes = Array.from(new Set(
       transactions.map((transaction) => canonical(transaction.note)).filter(Boolean)
     ));
@@ -1161,6 +1421,11 @@
       materials,
       payments: aggregatePayments(transactions),
       notes,
+      adjustments,
+      adjustment,
+      rawRevenue,
+      rawExpenses,
+      rawCups,
       revenue,
       totalExpenses,
       netBalance: revenue - totalExpenses,
@@ -1214,6 +1479,19 @@
     lines.push('', '*CATATAN*');
     if (report.notes.length) report.notes.forEach((note) => lines.push(`• ${note}`));
     else lines.push('• Tidak ada catatan');
+
+    lines.push('', '*PENYESUAIAN LAPORAN*');
+    if (report.adjustments.length) {
+      report.adjustments.forEach((row) => {
+        const parts = [];
+        if (row.cupDelta) parts.push(`cup ${row.cupDelta > 0 ? '+' : ''}${formatQuantity(row.cupDelta)}`);
+        if (row.revenueDelta) parts.push(`omzet ${row.revenueDelta > 0 ? '+' : ''}${formatMoney(row.revenueDelta)}`);
+        if (row.expenseDelta) parts.push(`pengeluaran ${row.expenseDelta > 0 ? '+' : ''}${formatMoney(row.expenseDelta)}`);
+        lines.push(`• ${row.date} — ${parts.join(', ') || 'catatan'}${row.note ? ` — ${row.note}` : ''}`);
+      });
+    } else {
+      lines.push('• Tidak ada penyesuaian pada periode ini');
+    }
 
     lines.push('', '*REKAP VARIAN TERJUAL*');
     if (report.products.length) {
@@ -1308,8 +1586,8 @@
     }
   }
 
-  function recipeNameForProduct(productName) {
-    const recipe = findRecipe(productName);
+  function recipeNameForProduct(productName, forcedRecipeKey) {
+    const recipe = findRecipe(productName, forcedRecipeKey);
     return recipe ? recipe.name : 'BELUM DIPETAKAN';
   }
 
@@ -1326,9 +1604,15 @@
       ['Periode', report.periodLabel],
       ['Kasir', report.cashierLabel],
       ['Total Transaksi', report.transactions.length],
+      ['Total Cup Sebelum Penyesuaian', report.rawCups],
+      ['Penyesuaian Cup', report.adjustment.cup],
       ['Total Cup', report.totalCups],
       ['Jumlah Varian', report.products.length],
+      ['Omzet Sebelum Penyesuaian', report.rawRevenue],
+      ['Penyesuaian Omzet', report.adjustment.revenue],
       ['Omzet', report.revenue],
+      ['Pengeluaran Sebelum Penyesuaian', report.rawExpenses],
+      ['Penyesuaian Pengeluaran', report.adjustment.expense],
       ['Total Pengeluaran', report.totalExpenses],
       ['Saldo Bersih', report.netBalance],
       ['Konsentrat Terpakai (ml)', report.materials.concentrateMl],
@@ -1338,10 +1622,11 @@
       ['Jumlah Catatan', report.notes.length]
     ];
 
-    const variants = [['No', 'Varian', 'Total_Cup', 'Omzet_Item', 'Resep']];
+    const variants = [['No', 'Varian', 'Total_Cup', 'Omzet_Item', 'Resep', 'Sumber_Varian']];
     report.products.forEach((product, index) => variants.push([
       index + 1, product.name, product.qty, product.revenue,
-      recipeNameForProduct(product.name)
+      recipeNameForProduct(product.name, product.recipeKey),
+      (product.sourceNames || []).join(', ')
     ]));
 
     const materials = [['No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis', 'Dipakai_Oleh']];
@@ -1385,10 +1670,17 @@
       index + 1, payment.name, payment.count, payment.amount
     ]));
 
+    const adjustments = [['Tanggal', 'Kasir', 'Penyesuaian_Cup', 'Penyesuaian_Omzet', 'Penyesuaian_Pengeluaran', 'Catatan', 'Diubah_Oleh']];
+    report.adjustments.forEach((row) => adjustments.push([
+      row.date, row.cashier, row.cupDelta, row.revenueDelta,
+      row.expenseDelta, row.note, row.updatedBy
+    ]));
+
     return {
       [`Ringkasan ${suffix}`]: summary,
       [`Varian ${suffix}`]: variants,
       [`Bahan ${suffix}`]: materials,
+      [`Penyesuaian ${suffix}`]: adjustments,
       [`Transaksi ${suffix}`]: transactions,
       [`Pengeluaran ${suffix}`]: expenses,
       [`Pembayaran ${suffix}`]: payments
@@ -1399,7 +1691,7 @@
     const map = new Map();
     reports.forEach((report) => {
       report.products.forEach((product) => {
-        map.set(keyText(product.name), [product.name, recipeNameForProduct(product.name)]);
+        map.set(keyText(product.name), [product.name, recipeNameForProduct(product.name, product.recipeKey)]);
       });
     });
     const rows = [['No', 'Nama_Produk_Varian', 'Resep']];
@@ -1411,7 +1703,7 @@
 
   function masterRecipeSheet() {
     const rows = [['Resep', 'Bahan', 'Jumlah_per_Cup_atau_Batch', 'Satuan']];
-    Object.entries(RECIPE_DATA.recipes).forEach(([recipeName, materials]) => {
+    Object.entries(runtimeRecipeData.recipes).forEach(([recipeName, materials]) => {
       materials.forEach((material) => rows.push([
         recipeName, material.material, material.qty, material.unit
       ]));
@@ -1521,6 +1813,16 @@
     exportReports([report], `Laporan_TeCo_${type}_${report.period}.xlsx`);
   }
 
+  function exportDailySheets() {
+    const report = buildReportData('daily', state.date, state.cashier);
+    exportReports([report], `Laporan_TeCo_harian_${state.date}.xlsx`);
+  }
+
+  function exportMonthlySheets() {
+    const report = buildReportData('monthly', state.month, state.cashier);
+    exportReports([report], `Laporan_TeCo_bulanan_${state.month}.xlsx`);
+  }
+
   function exportBothSheets() {
     const daily = buildReportData('daily', state.date, state.cashier);
     const monthly = buildReportData('monthly', state.month, state.cashier);
@@ -1555,12 +1857,285 @@
     exportActiveSheets();
   }
 
+  function adjustmentRows(rows, editable) {
+    if (!rows.length) {
+      return '<tr><td colspan="8" class="teco-native-empty">Tidak ada penyesuaian pada periode ini.</td></tr>';
+    }
+    return rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.date)}</td>
+        <td>${escapeHtml(row.cashier)}</td>
+        <td class="teco-native-number">${row.cupDelta > 0 ? '+' : ''}${formatQuantity(row.cupDelta)}</td>
+        <td class="teco-native-number">${row.revenueDelta > 0 ? '+' : ''}${formatMoney(row.revenueDelta)}</td>
+        <td class="teco-native-number">${row.expenseDelta > 0 ? '+' : ''}${formatMoney(row.expenseDelta)}</td>
+        <td>${escapeHtml(row.note || '-')}</td>
+        ${editable ? `<td><button type="button" class="teco-native-mini" data-edit-adjustment="${escapeHtml(row.id)}">Edit</button></td>` : ''}
+      </tr>
+    `).join('');
+  }
+
+  function currentVariantSources() {
+    const map = new Map();
+    extractTransactions(getPrimaryRoot()).forEach((transaction) => {
+      transaction.items.forEach((item) => {
+        const name = canonical(item.name);
+        if (name) map.set(keyText(name), name);
+      });
+    });
+    Object.entries(runtimeConfig.variantOverrides || {}).forEach(([key, row]) => {
+      map.set(key, canonical(row.sourceName || row.displayName || key));
+    });
+    return Array.from(map.entries())
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'id'));
+  }
+
+  function recipeOptions(selected) {
+    const keys = Object.keys(runtimeRecipeData.recipes)
+      .filter((key) => key !== 'KONSENTRAT')
+      .sort((a, b) => a.localeCompare(b, 'id'));
+    return ['<option value="">Otomatis</option>']
+      .concat(keys.map((key) => `<option value="${escapeHtml(key)}" ${keyText(selected) === key ? 'selected' : ''}>${escapeHtml(key)}</option>`))
+      .join('');
+  }
+
+  function variantEditorRows() {
+    const rows = currentVariantSources();
+    if (!rows.length) return '<tr><td colspan="5" class="teco-native-empty">Belum ada varian transaksi.</td></tr>';
+    return rows.map((row) => {
+      const override = runtimeConfig.variantOverrides[row.key] || {};
+      return `
+        <tr data-variant-key="${escapeHtml(row.key)}">
+          <td>${escapeHtml(row.name)}</td>
+          <td><input data-field="displayName" value="${escapeHtml(override.displayName || row.name)}"></td>
+          <td><input data-field="cupMultiplier" type="number" min="0.01" step="0.01" value="${escapeHtml(override.cupMultiplier || 1)}"></td>
+          <td><select data-field="recipeKey">${recipeOptions(override.recipeKey || '')}</select></td>
+          <td><button type="button" class="teco-native-mini" data-save-variant="${escapeHtml(row.key)}">Simpan</button></td>
+        </tr>`;
+    }).join('');
+  }
+
+  function recipeEditorRows(recipeName) {
+    const rows = runtimeRecipeData.recipes[keyText(recipeName)] || [];
+    if (!rows.length) {
+      return `<tr><td><input data-recipe-material placeholder="Nama bahan"></td><td><input data-recipe-qty type="number" min="0" step="0.01" placeholder="0"></td><td><input data-recipe-unit value="ml"></td><td><button type="button" class="teco-native-mini danger" data-remove-recipe-row>Hapus</button></td></tr>`;
+    }
+    return rows.map((row) => `
+      <tr>
+        <td><input data-recipe-material value="${escapeHtml(row.material)}"></td>
+        <td><input data-recipe-qty type="number" min="0" step="0.01" value="${escapeHtml(row.qty)}"></td>
+        <td><input data-recipe-unit value="${escapeHtml(row.unit)}"></td>
+        <td><button type="button" class="teco-native-mini danger" data-remove-recipe-row>Hapus</button></td>
+      </tr>`).join('');
+  }
+
+  function renderAdminModal() {
+    if (!ensureAdmin()) return;
+    refreshRuntimeConfig(getPrimaryRoot());
+    const existing = document.getElementById('tecoNativeAdminModal');
+    if (existing) existing.remove();
+
+    const recipeNames = Object.keys(runtimeRecipeData.recipes)
+      .filter((name) => name !== 'KONSENTRAT')
+      .sort((a, b) => a.localeCompare(b, 'id'));
+    if (!state.selectedRecipe || !runtimeRecipeData.recipes[keyText(state.selectedRecipe)]) {
+      state.selectedRecipe = recipeNames[0] || '';
+    }
+    const editAdjustment = (runtimeConfig.adjustments || []).find(
+      (row) => canonical(row.id) === canonical(state.adjustmentEditId)
+    ) || null;
+    const adjustmentDate = editAdjustment ? editAdjustment.date : (state.date || todayKey());
+    const adjustmentCashier = editAdjustment ? editAdjustment.cashier : 'Semua';
+    const adjustmentCup = editAdjustment ? editAdjustment.cupDelta : 0;
+    const adjustmentRevenue = editAdjustment ? editAdjustment.revenueDelta : 0;
+    const adjustmentExpense = editAdjustment ? editAdjustment.expenseDelta : 0;
+    const adjustmentNote = editAdjustment ? editAdjustment.note : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'tecoNativeAdminModal';
+    modal.className = 'teco-native-modal active';
+    modal.innerHTML = `
+      <div class="teco-native-modal-card">
+        <div class="teco-native-modal-head">
+          <div><h3>Pengaturan Varian, Bahan, dan Penyesuaian</h3><p>Khusus Admin. Perubahan disimpan pada data utama POS.</p></div>
+          <button type="button" data-close-native-admin>×</button>
+        </div>
+        <div class="teco-native-admin-tabs">
+          <button type="button" data-admin-tab="variants" class="${state.editorTab === 'variants' ? 'active' : ''}">Varian</button>
+          <button type="button" data-admin-tab="recipes" class="${state.editorTab === 'recipes' ? 'active' : ''}">Bahan & Resep</button>
+          <button type="button" data-admin-tab="adjustments" class="${state.editorTab === 'adjustments' ? 'active' : ''}">Penyesuaian</button>
+        </div>
+
+        <section class="teco-native-admin-section ${state.editorTab === 'variants' ? '' : 'hidden'}" data-admin-section="variants">
+          <p class="teco-native-help">Ubah nama varian pada laporan, faktor cup, dan mapping resep. Nama transaksi asli tidak dihapus.</p>
+          <div class="teco-native-table-wrap"><table><thead><tr><th>Varian Transaksi</th><th>Nama di Laporan</th><th>Faktor Cup</th><th>Resep</th><th>Aksi</th></tr></thead><tbody>${variantEditorRows()}</tbody></table></div>
+        </section>
+
+        <section class="teco-native-admin-section ${state.editorTab === 'recipes' ? '' : 'hidden'}" data-admin-section="recipes">
+          <div class="teco-native-editor-toolbar">
+            <label>Resep<select id="tecoNativeRecipeSelect">${recipeNames.map((name) => `<option value="${escapeHtml(name)}" ${keyText(name) === keyText(state.selectedRecipe) ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('')}</select></label>
+            <button type="button" id="tecoNativeNewRecipe" class="secondary">+ Resep Baru</button>
+            <label>Hasil Konsentrat per Batch (ml)<input id="tecoNativeConcentrateYield" type="number" min="1" value="${escapeHtml(runtimeRecipeData.concentrateYield || 1000)}"></label>
+          </div>
+          <div class="teco-native-table-wrap"><table><thead><tr><th>Bahan</th><th>Jumlah per Cup/Batch</th><th>Satuan</th><th>Aksi</th></tr></thead><tbody id="tecoNativeRecipeBody">${recipeEditorRows(state.selectedRecipe)}</tbody></table></div>
+          <div class="teco-native-form-actions"><button type="button" id="tecoNativeAddRecipeRow" class="secondary">+ Tambah Bahan</button><button type="button" id="tecoNativeSaveRecipe">Simpan Resep</button></div>
+        </section>
+
+        <section class="teco-native-admin-section ${state.editorTab === 'adjustments' ? '' : 'hidden'}" data-admin-section="adjustments">
+          <form id="tecoNativeAdjustmentForm" class="teco-native-adjustment-form">
+            <input id="tecoNativeAdjustmentId" type="hidden" value="${escapeHtml(state.adjustmentEditId)}">
+            <label>Tanggal<input id="tecoNativeAdjustmentDate" type="date" value="${escapeHtml(adjustmentDate)}" required></label>
+            <label>Kasir<select id="tecoNativeAdjustmentCashier"><option value="Semua">Semua</option>${renderCashierOptions(extractTransactions(getPrimaryRoot())).replace('<option value="ALL">Semua Kasir</option>', '')}</select></label>
+            <label>Penyesuaian Cup<input id="tecoNativeAdjustmentCup" type="number" step="0.01" value="${escapeHtml(adjustmentCup)}"></label>
+            <label>Penyesuaian Omzet<input id="tecoNativeAdjustmentRevenue" type="number" step="100" value="${escapeHtml(adjustmentRevenue)}"></label>
+            <label>Penyesuaian Pengeluaran<input id="tecoNativeAdjustmentExpense" type="number" step="100" value="${escapeHtml(adjustmentExpense)}"></label>
+            <label class="wide">Catatan<textarea id="tecoNativeAdjustmentNote" rows="2" placeholder="Alasan penyesuaian">${escapeHtml(adjustmentNote)}</textarea></label>
+            <div class="teco-native-form-actions wide"><button type="submit">Simpan Penyesuaian</button><button type="button" id="tecoNativeCancelAdjustment" class="secondary">Batal Edit</button></div>
+          </form>
+          <div class="teco-native-table-wrap"><table><thead><tr><th>Tanggal</th><th>Kasir</th><th>Cup</th><th>Omzet</th><th>Pengeluaran</th><th>Catatan</th><th>Aksi</th></tr></thead><tbody>${(runtimeConfig.adjustments || []).map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(row.cashier)}</td><td>${formatQuantity(row.cupDelta)}</td><td>${formatMoney(row.revenueDelta)}</td><td>${formatMoney(row.expenseDelta)}</td><td>${escapeHtml(row.note || '-')}</td><td><button type="button" class="teco-native-mini" data-edit-adjustment="${escapeHtml(row.id)}">Edit</button> <button type="button" class="teco-native-mini danger" data-delete-adjustment="${escapeHtml(row.id)}">Hapus</button></td></tr>`).join('') || '<tr><td colspan="7" class="teco-native-empty">Belum ada penyesuaian.</td></tr>'}</tbody></table></div>
+        </section>
+      </div>`;
+    document.body.appendChild(modal);
+    const adjustmentCashierSelect = document.getElementById('tecoNativeAdjustmentCashier');
+    if (adjustmentCashierSelect) adjustmentCashierSelect.value = adjustmentCashier;
+    bindAdminModal();
+  }
+
+  function bindAdminModal() {
+    const modal = document.getElementById('tecoNativeAdminModal');
+    if (!modal) return;
+    modal.querySelector('[data-close-native-admin]')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) modal.remove();
+    });
+    modal.querySelectorAll('[data-admin-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.editorTab = button.dataset.adminTab;
+        renderAdminModal();
+      });
+    });
+    modal.querySelectorAll('[data-save-variant]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const key = button.dataset.saveVariant;
+        const row = button.closest('tr');
+        const source = currentVariantSources().find((item) => item.key === key);
+        runtimeConfig.variantOverrides[key] = {
+          sourceName: source ? source.name : key,
+          displayName: canonical(row.querySelector('[data-field="displayName"]').value),
+          cupMultiplier: Math.max(0.01, toNumber(row.querySelector('[data-field="cupMultiplier"]').value) || 1),
+          recipeKey: canonical(row.querySelector('[data-field="recipeKey"]').value)
+        };
+        if (saveNativeConfig(runtimeConfig)) {
+          alert('Varian berhasil disimpan.');
+          render();
+        }
+      });
+    });
+    const recipeSelect = document.getElementById('tecoNativeRecipeSelect');
+    recipeSelect?.addEventListener('change', () => {
+      state.selectedRecipe = recipeSelect.value;
+      renderAdminModal();
+    });
+    document.getElementById('tecoNativeNewRecipe')?.addEventListener('click', () => {
+      const name = canonical(window.prompt('Nama resep baru:'));
+      if (!name) return;
+      runtimeConfig.recipes[keyText(name)] = [{ material: 'Cup + Tutup', qty: 1, unit: 'pcs' }];
+      state.selectedRecipe = keyText(name);
+      saveNativeConfig(runtimeConfig);
+      renderAdminModal();
+    });
+    document.getElementById('tecoNativeAddRecipeRow')?.addEventListener('click', () => {
+      const body = document.getElementById('tecoNativeRecipeBody');
+      body.insertAdjacentHTML('beforeend', '<tr><td><input data-recipe-material placeholder="Nama bahan"></td><td><input data-recipe-qty type="number" min="0" step="0.01" placeholder="0"></td><td><input data-recipe-unit value="ml"></td><td><button type="button" class="teco-native-mini danger" data-remove-recipe-row>Hapus</button></td></tr>');
+      bindRecipeRemoveButtons();
+    });
+    bindRecipeRemoveButtons();
+    document.getElementById('tecoNativeSaveRecipe')?.addEventListener('click', () => {
+      const name = canonical(document.getElementById('tecoNativeRecipeSelect')?.value || state.selectedRecipe);
+      if (!name) return alert('Pilih atau buat resep terlebih dahulu.');
+      const rows = Array.from(document.querySelectorAll('#tecoNativeRecipeBody tr')).map((row) => ({
+        material: canonical(row.querySelector('[data-recipe-material]')?.value),
+        qty: toNumber(row.querySelector('[data-recipe-qty]')?.value),
+        unit: canonical(row.querySelector('[data-recipe-unit]')?.value || 'unit')
+      })).filter((row) => row.material && row.qty > 0);
+      if (!rows.length) return alert('Resep minimal memiliki satu bahan dengan jumlah lebih dari 0.');
+      runtimeConfig.recipes[keyText(name)] = rows;
+      runtimeConfig.concentrateYield = Math.max(1, toNumber(document.getElementById('tecoNativeConcentrateYield')?.value) || 1000);
+      if (saveNativeConfig(runtimeConfig)) {
+        alert('Bahan dan resep berhasil disimpan.');
+        render();
+        renderAdminModal();
+      }
+    });
+    document.getElementById('tecoNativeAdjustmentForm')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const id = canonical(document.getElementById('tecoNativeAdjustmentId').value) || `adj-${Date.now()}`;
+      const record = {
+        id,
+        date: document.getElementById('tecoNativeAdjustmentDate').value,
+        cashier: canonical(document.getElementById('tecoNativeAdjustmentCashier').value || 'Semua'),
+        cupDelta: toNumber(document.getElementById('tecoNativeAdjustmentCup').value),
+        revenueDelta: toNumber(document.getElementById('tecoNativeAdjustmentRevenue').value),
+        expenseDelta: toNumber(document.getElementById('tecoNativeAdjustmentExpense').value),
+        note: canonical(document.getElementById('tecoNativeAdjustmentNote').value),
+        updatedBy: state.session.name || 'Admin',
+        updatedAt: new Date().toISOString()
+      };
+      const index = runtimeConfig.adjustments.findIndex((row) => canonical(row.id) === id);
+      if (index >= 0) runtimeConfig.adjustments[index] = record;
+      else runtimeConfig.adjustments.unshift(record);
+      state.adjustmentEditId = '';
+      if (saveNativeConfig(runtimeConfig)) {
+        render();
+        renderAdminModal();
+      }
+    });
+    document.getElementById('tecoNativeCancelAdjustment')?.addEventListener('click', () => {
+      state.adjustmentEditId = '';
+      renderAdminModal();
+    });
+    modal.querySelectorAll('[data-edit-adjustment]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const row = runtimeConfig.adjustments.find((item) => canonical(item.id) === button.dataset.editAdjustment);
+        if (!row) return;
+        state.editorTab = 'adjustments';
+        state.adjustmentEditId = row.id;
+        renderAdminModal();
+        document.getElementById('tecoNativeAdjustmentId').value = row.id;
+        document.getElementById('tecoNativeAdjustmentDate').value = row.date;
+        document.getElementById('tecoNativeAdjustmentCashier').value = row.cashier;
+        document.getElementById('tecoNativeAdjustmentCup').value = row.cupDelta || 0;
+        document.getElementById('tecoNativeAdjustmentRevenue').value = row.revenueDelta || 0;
+        document.getElementById('tecoNativeAdjustmentExpense').value = row.expenseDelta || 0;
+        document.getElementById('tecoNativeAdjustmentNote').value = row.note || '';
+      });
+    });
+    modal.querySelectorAll('[data-delete-adjustment]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (!confirm('Hapus penyesuaian ini?')) return;
+        runtimeConfig.adjustments = runtimeConfig.adjustments.filter((row) => canonical(row.id) !== button.dataset.deleteAdjustment);
+        saveNativeConfig(runtimeConfig);
+        render();
+        renderAdminModal();
+      });
+    });
+  }
+
+  function bindRecipeRemoveButtons() {
+    document.querySelectorAll('[data-remove-recipe-row]').forEach((button) => {
+      button.onclick = () => button.closest('tr')?.remove();
+    });
+  }
+
   function render() {
     if (!ensureMounted()) return;
 
     const root = document.getElementById('teco-native-report');
     const primaryRoot = getPrimaryRoot();
     const allTransactions = extractTransactions(primaryRoot);
+    const session = detectSession(primaryRoot);
+    refreshRuntimeConfig(primaryRoot);
 
     if (!state.date) state.date = latestTransactionDate(allTransactions);
     if (!state.month) state.month = latestTransactionMonth(allTransactions);
@@ -1573,21 +2148,19 @@
       state.month = latestTransactionMonth(allTransactions);
     }
 
-    const filtered = filterTransactions(allTransactions);
-    const products = aggregateProducts(filtered);
-    const materialResult = aggregateMaterials(products);
-    const allExpenses = extractExpenses(primaryRoot);
-    const filteredExpenses = filterExpenses(
-      allExpenses,
-      state.mode,
-      state.mode === 'daily' ? state.date : state.month,
-      state.cashier
-    );
+    if (session.role !== 'admin' && session.name) {
+      state.cashier = session.name;
+    }
 
-    const revenue = filtered.reduce((sum, transaction) => sum + transaction.total, 0);
-    const expensesTotal = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const netBalance = revenue - expensesTotal;
-    const cups = products.reduce((sum, product) => sum + product.qty, 0);
+    const report = activeReport();
+    const filtered = report.transactions;
+    const products = report.products;
+    const materialResult = report.materials;
+    const filteredExpenses = report.expenses;
+    const revenue = report.revenue;
+    const expensesTotal = report.totalExpenses;
+    const netBalance = report.netBalance;
+    const cups = report.totalCups;
 
     const latestInfo = allTransactions.length
       ? `Transaksi terbaru: ${escapeHtml(latestTransactionDate(allTransactions))}`
@@ -1620,13 +2193,14 @@
 
         <label>
           Kasir
-          <select id="tecoNativeCashier">${renderCashierOptions(allTransactions)}</select>
+          <select id="tecoNativeCashier" ${session.role !== 'admin' ? 'disabled' : ''}>${renderCashierOptions(allTransactions)}</select>
         </label>
 
         <button type="button" id="tecoNativeRefresh" class="secondary">Muat Ulang</button>
         <button type="button" id="tecoNativeWhatsApp" class="whatsapp">WhatsApp</button>
-        <button type="button" id="tecoNativeExport">Excel / Sheets</button>
-        <button type="button" id="tecoNativeExportBoth" class="combined">Harian + Bulanan</button>
+        <button type="button" id="tecoNativeExportDaily">Excel Harian</button>
+        <button type="button" id="tecoNativeExportMonthly">Excel Bulanan</button>
+        ${session.role === 'admin' ? '<button type="button" id="tecoNativeAdminEdit" class="admin-edit">Edit Varian & Bahan</button>' : ''}
       </div>
 
       <div class="teco-native-info">
@@ -1636,8 +2210,9 @@
 
       <div class="teco-native-cards">
         <article><span>Transaksi</span><strong>${filtered.length}</strong></article>
-        <article><span>Total cup</span><strong>${formatQuantity(cups)}</strong></article>
+        <article><span>Rekap cup</span><strong>${formatQuantity(cups)}</strong></article>
         <article><span>Varian terjual</span><strong>${products.length}</strong></article>
+        <article><span>Penyesuaian</span><strong>${report.adjustments.length}</strong></article>
         <article><span>Omzet</span><strong>${formatMoney(revenue)}</strong></article>
         <article><span>Pengeluaran</span><strong>${formatMoney(expensesTotal)}</strong></article>
         <article><span>Saldo bersih</span><strong>${formatMoney(netBalance)}</strong></article>
@@ -1652,17 +2227,17 @@
 
       <div class="teco-native-grid">
         <section class="teco-native-panel">
-          <h4>Rekap Varian Terjual</h4>
+          <h4>Rekap Cup & Varian Terjual</h4>
           <div class="teco-native-table-wrap">
             <table>
-              <thead><tr><th>No.</th><th>Varian</th><th>Cup</th><th>Omzet Item</th></tr></thead>
+              <thead><tr><th>No.</th><th>Varian</th><th>Cup</th><th>Omzet Item</th><th>Resep</th></tr></thead>
               <tbody>${productRows(products)}</tbody>
             </table>
           </div>
         </section>
 
         <section class="teco-native-panel">
-          <h4>Analisis Bahan Terpakai</h4>
+          <h4>Kebutuhan Bahan</h4>
           <div class="teco-native-table-wrap">
             <table>
               <thead><tr><th>No.</th><th>Bahan</th><th>Jumlah</th><th>Satuan</th><th>Dipakai oleh</th></tr></thead>
@@ -1671,6 +2246,17 @@
           </div>
         </section>
       </div>
+
+
+      <section class="teco-native-panel teco-native-adjustments">
+        <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>
+        <div class="teco-native-table-wrap">
+          <table>
+            <thead><tr><th>No.</th><th>Tanggal</th><th>Kasir</th><th>Cup</th><th>Omzet</th><th>Pengeluaran</th><th>Catatan</th>${session.role === 'admin' ? '<th>Aksi</th>' : ''}</tr></thead>
+            <tbody>${adjustmentRows(report.adjustments, session.role === 'admin')}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="teco-native-panel teco-native-transactions">
         <h4>Detail Transaksi</h4>
@@ -1722,8 +2308,11 @@
     });
 
     document.getElementById('tecoNativeWhatsApp')?.addEventListener('click', sendWhatsAppReport);
-    document.getElementById('tecoNativeExport')?.addEventListener('click', exportActiveSheets);
-    document.getElementById('tecoNativeExportBoth')?.addEventListener('click', exportBothSheets);
+    document.getElementById('tecoNativeExportDaily')?.addEventListener('click', exportDailySheets);
+    document.getElementById('tecoNativeExportMonthly')?.addEventListener('click', exportMonthlySheets);
+    document.getElementById('tecoNativeAdminEdit')?.addEventListener('click', renderAdminModal);
+    document.getElementById('tecoNativeAddAdjustment')?.addEventListener('click', () => { state.editorTab = 'adjustments'; renderAdminModal(); });
+    root.querySelectorAll('[data-edit-adjustment]').forEach((button) => button.addEventListener('click', () => { state.editorTab = 'adjustments'; state.adjustmentEditId = button.dataset.editAdjustment; renderAdminModal(); }));
   }
 
   function scheduleRender(delay) {
@@ -1830,7 +2419,10 @@
       getWhatsAppText: () => buildWhatsAppText(activeReport()),
       sendWhatsApp: sendWhatsAppReport,
       exportSheets: exportActiveSheets,
+      exportDailySheets,
+      exportMonthlySheets,
       exportBothSheets,
+      openAdminEditor: renderAdminModal,
       getStatus: () => {
         const transactions = extractTransactions(getPrimaryRoot());
         return {
@@ -1841,7 +2433,10 @@
           mode: state.mode,
           selectedDate: state.date,
           selectedMonth: state.month,
-          cashier: state.cashier
+          cashier: state.cashier,
+          role: state.session.role,
+          user: state.session.name,
+          adjustments: runtimeConfig.adjustments.length
         };
       }
     };
