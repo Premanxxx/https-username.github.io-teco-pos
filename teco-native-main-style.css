@@ -1,0 +1,208 @@
+#teco-native-report {
+  margin: 12px 0 20px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  color: #111827;
+  font-family: inherit;
+}
+#teco-native-report * { box-sizing: border-box; }
+.teco-native-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.teco-native-head h3 { margin: 0; font-size: 20px; }
+.teco-native-head p {
+  margin: 5px 0 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.teco-native-status {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.teco-native-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+.teco-native-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #4b5563;
+  font-size: 11px;
+  font-weight: 700;
+}
+.teco-native-controls input,
+.teco-native-controls select,
+.teco-native-controls button {
+  min-height: 38px;
+  padding: 8px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+.teco-native-controls button {
+  border-color: #15803d;
+  background: #15803d;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.teco-native-controls button.secondary {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #1f2937;
+}
+.teco-native-tabs {
+  display: flex;
+  gap: 5px;
+}
+.teco-native-tabs button {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+.teco-native-tabs button.active {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+.teco-native-controls .hidden { display: none; }
+.teco-native-info {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 4px;
+  color: #475569;
+  font-size: 11px;
+}
+.teco-native-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 9px;
+  margin: 8px 0 12px;
+}
+.teco-native-cards article {
+  padding: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.teco-native-cards span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+.teco-native-cards strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 19px;
+}
+.teco-native-warning {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+}
+.teco-native-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 12px;
+}
+.teco-native-panel {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.teco-native-panel h4 {
+  margin: 0;
+  padding: 11px 13px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.teco-native-transactions { margin-top: 12px; }
+.teco-native-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.teco-native-panel table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+}
+.teco-native-panel th,
+.teco-native-panel td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+  font-size: 11px;
+}
+.teco-native-panel th {
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 800;
+}
+.teco-native-number {
+  text-align: right !important;
+  white-space: nowrap;
+}
+.teco-native-empty {
+  padding: 22px !important;
+  text-align: center !important;
+  color: #64748b;
+}
+body.dark-mode #teco-native-report,
+body.dark #teco-native-report {
+  border-color: #334155;
+  background: #111827;
+  color: #f8fafc;
+}
+body.dark-mode .teco-native-panel,
+body.dark .teco-native-panel,
+body.dark-mode .teco-native-cards article,
+body.dark .teco-native-cards article {
+  border-color: #334155;
+  background: #1f2937;
+}
+body.dark-mode .teco-native-panel h4,
+body.dark .teco-native-panel h4,
+body.dark-mode .teco-native-panel th,
+body.dark .teco-native-panel th,
+body.dark-mode .teco-native-controls,
+body.dark .teco-native-controls {
+  border-color: #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+@media (max-width: 850px) {
+  .teco-native-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .teco-native-grid { grid-template-columns: 1fr; }
+  .teco-native-head { flex-direction: column; }
+  .teco-native-status { white-space: normal; }
+}
