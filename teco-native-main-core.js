@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.2.0';
+  const VERSION = '2.3.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -48,6 +48,22 @@
     'id', 'transactionId', 'transaction_id', 'trxId', 'trx_id',
     'orderId', 'order_id', 'invoice', 'receiptNo', 'receipt_no',
     'noStruk', 'kodeTransaksi'
+  ];
+
+
+  const PAYMENT_KEYS = [
+    'paymentMethod', 'payment_method', 'payment', 'method', 'metode',
+    'metodePembayaran', 'metode_pembayaran', 'caraBayar', 'cara_bayar'
+  ];
+
+  const NOTE_KEYS = [
+    'note', 'notes', 'catatan', 'description', 'deskripsi',
+    'keterangan', 'remark', 'remarks'
+  ];
+
+  const EXPENSE_AMOUNT_KEYS = [
+    'amount', 'nominal', 'total', 'value', 'nilai', 'biaya',
+    'expenseAmount', 'expense_amount'
   ];
 
   function parseMaybeJson(value) {
@@ -120,6 +136,21 @@
       .replace(/\bSakata\b/gi, 'Sakala')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function normalizePayment(value) {
+    if (value && typeof value === 'object') {
+      value = first(value, ['name', 'label', 'type', 'method', 'metode']);
+    }
+
+    const text = canonical(value || 'Tidak diketahui');
+    const key = keyText(text);
+
+    if (/^(CASH|TUNAI)$/.test(key)) return 'Tunai';
+    if (/QRIS|QR CODE/.test(key)) return 'QRIS';
+    if (/TRANSFER|BANK/.test(key)) return 'Transfer';
+    if (/DEBIT|KARTU|CARD/.test(key)) return 'Kartu/Debit';
+    return text || 'Tidak diketahui';
   }
 
   function keyText(value) {
@@ -414,12 +445,16 @@
     }
 
     const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${total}`);
+    const payment = normalizePayment(first(raw, PAYMENT_KEYS));
+    const note = canonical(first(raw, NOTE_KEYS) || '');
 
     return {
       id,
       date,
       total,
       cashier: canonical(cashier || 'Tidak diketahui'),
+      payment,
+      note,
       items,
       raw
     };
@@ -500,6 +535,97 @@
       ].join('::');
 
       if (!map.has(signature)) map.set(signature, transaction);
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.date - a.date);
+  }
+
+  function normalizeExpense(raw, fallbackId) {
+    raw = parseMaybeJson(raw);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    if (locateItems(raw).length) return null;
+
+    const date = parseDate(first(raw, DATE_KEYS));
+    const amount = toNumber(first(raw, EXPENSE_AMOUNT_KEYS));
+    if (!date || !(amount > 0)) return null;
+
+    let cashier = first(raw, CASHIER_KEYS);
+    if (cashier && typeof cashier === 'object') {
+      cashier = first(cashier, ['name', 'username', 'displayName', 'id']);
+    }
+
+    const category = canonical(first(raw, [
+      'category', 'kategori', 'type', 'tipe', 'jenis', 'expenseType', 'expense_type'
+    ]) || 'Lain-lain');
+
+    const note = canonical(first(raw, NOTE_KEYS) || category);
+    const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${amount}-${category}`);
+
+    return {
+      id,
+      date,
+      amount,
+      cashier: canonical(cashier || 'Tidak diketahui'),
+      category,
+      note,
+      raw
+    };
+  }
+
+  function extractExpenses(root) {
+    root = parseMaybeJson(root);
+    const found = [];
+    const seen = new WeakSet();
+    let visited = 0;
+
+    function walk(node, path, keyHint, depth) {
+      node = parseMaybeJson(node);
+      if (!node || typeof node !== 'object' || depth > 10 || visited > 25000) return;
+      if (seen.has(node)) return;
+      seen.add(node);
+      visited += 1;
+
+      if (!Array.isArray(node)) {
+        const pathLooksExpense = /expense|pengeluaran|biaya|cost/i.test(path);
+        const hasAmount = first(node, EXPENSE_AMOUNT_KEYS) !== undefined;
+        const hasDate = first(node, DATE_KEYS) !== undefined;
+        const hasExpenseSignal = first(node, [
+          'category', 'kategori', 'expenseType', 'expense_type', 'nominal', 'biaya'
+        ]) !== undefined;
+
+        if ((pathLooksExpense || hasExpenseSignal) && hasAmount && hasDate) {
+          const expense = normalizeExpense(node, keyHint);
+          if (expense) {
+            found.push(expense);
+            return;
+          }
+        }
+      }
+
+      if (Array.isArray(node)) {
+        node.forEach((child, index) => walk(child, `${path}[${index}]`, String(index), depth + 1));
+        return;
+      }
+
+      Object.entries(node).forEach(([key, child]) => {
+        if (/^(menu|menus|products|users|settings|config|stock|stok|recipes|resep)$/i.test(key) && depth > 0) return;
+        walk(child, path ? `${path}.${key}` : key, key, depth + 1);
+      });
+    }
+
+    walk(root, '', '', 0);
+
+    const map = new Map();
+    found.forEach((expense) => {
+      const signature = [
+        expense.id,
+        expense.date.getTime(),
+        cashierKey(expense.cashier),
+        Math.round(expense.amount),
+        keyText(expense.category),
+        keyText(expense.note)
+      ].join('::');
+      if (!map.has(signature)) map.set(signature, expense);
     });
 
     return Array.from(map.values()).sort((a, b) => b.date - a.date);
@@ -658,8 +784,9 @@
     const unmapped = [];
     const concentrateRecipe = RECIPE_DATA.recipes.KONSENTRAT || [];
     const concentrateYield = RECIPE_DATA.concentrateYield || 1000;
+    let concentrateMl = 0;
 
-    function addMaterial(material, qty, unit, productName) {
+    function addMaterial(material, qty, unit, productName, kind) {
       const name = canonical(material);
       const key = `${keyText(name)}::${keyText(unit)}`;
 
@@ -668,12 +795,14 @@
           material: name,
           qty: 0,
           unit: canonical(unit || 'unit'),
+          kind: kind || 'Bahan baku',
           products: new Set()
         });
       }
 
       const row = materials.get(key);
       row.qty += toNumber(qty);
+      if (kind === 'Bahan baku' || row.kind !== 'Bahan baku') row.kind = kind || row.kind;
       row.products.add(canonical(productName));
     }
 
@@ -682,7 +811,7 @@
 
       if (!recipe) {
         unmapped.push(product.name);
-        addMaterial('Cup + Tutup', product.qty, 'pcs', product.name);
+        addMaterial('Cup + Tutup', product.qty, 'pcs', product.name, 'Kemasan');
         return;
       }
 
@@ -701,21 +830,29 @@
           concentrateRecipe.length &&
           concentrateYield > 0
         ) {
+          concentrateMl += usedQty;
           concentrateRecipe.forEach((component) => {
             addMaterial(
               component.material,
               (usedQty / concentrateYield) * component.qty,
               component.unit,
-              product.name
+              product.name,
+              'Bahan baku konsentrat'
             );
           });
         } else {
-          addMaterial(row.material, usedQty, row.unit, product.name);
+          addMaterial(
+            row.material,
+            usedQty,
+            row.unit,
+            product.name,
+            materialKey.includes('CUP') ? 'Kemasan' : 'Bahan baku'
+          );
         }
       });
 
       if (!hasPackaging) {
-        addMaterial('Cup + Tutup', product.qty, 'pcs', product.name);
+        addMaterial('Cup + Tutup', product.qty, 'pcs', product.name, 'Kemasan');
       }
     });
 
@@ -725,9 +862,13 @@
           material: row.material,
           qty: row.qty,
           unit: row.unit,
+          kind: row.kind,
           products: Array.from(row.products).sort()
         }))
         .sort((a, b) => a.material.localeCompare(b.material, 'id')),
+      concentrateMl,
+      concentrateBatches: concentrateYield > 0 ? concentrateMl / concentrateYield : 0,
+      concentrateYield,
       unmapped: Array.from(new Set(unmapped)).sort()
     };
   }
@@ -912,6 +1053,483 @@
     `).join('');
   }
 
+  function filterExpenses(expenses, mode, period, cashier) {
+    return expenses.filter((expense) => {
+      const periodMatch = mode === 'daily'
+        ? dateKey(expense.date) === period
+        : monthKey(expense.date) === period;
+      const cashierMatch = cashier === 'ALL'
+        || cashierKey(expense.cashier) === cashierKey(cashier);
+      return periodMatch && cashierMatch;
+    });
+  }
+
+  function formatPeriodLabel(mode, period) {
+    if (mode === 'daily') {
+      const date = new Date(`${period}T12:00:00+07:00`);
+      if (Number.isNaN(date.getTime())) return period;
+      return new Intl.DateTimeFormat('id-ID', {
+        timeZone: TIME_ZONE,
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }).format(date);
+    }
+
+    const date = new Date(`${period}-01T12:00:00+07:00`);
+    if (Number.isNaN(date.getTime())) return period;
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: TIME_ZONE,
+      month: 'long',
+      year: 'numeric'
+    }).format(date);
+  }
+
+  function timeText(date) {
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: TIME_ZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(date);
+  }
+
+  function materialDisplay(material) {
+    const qty = toNumber(material.qty);
+    const unitKey = keyText(material.unit);
+    const nameKey = keyText(material.material);
+
+    if (nameKey.includes('CUP') && unitKey === 'PCS') {
+      return `${formatQuantity(qty)} set`;
+    }
+
+    if (unitKey === 'ML' && qty >= 1000) {
+      return `${formatQuantity(qty / 1000)} liter`;
+    }
+
+    return `${formatQuantity(qty)} ${material.unit}`;
+  }
+
+  function aggregatePayments(transactions) {
+    const map = new Map();
+    transactions.forEach((transaction) => {
+      const name = normalizePayment(transaction.payment);
+      const key = keyText(name);
+      if (!map.has(key)) map.set(key, { name, count: 0, amount: 0 });
+      const row = map.get(key);
+      row.count += 1;
+      row.amount += toNumber(transaction.total);
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
+  }
+
+  function buildReportData(mode, period, cashier) {
+    const root = getPrimaryRoot();
+    const allTransactions = extractTransactions(root);
+    const allExpenses = extractExpenses(root);
+
+    const transactions = allTransactions.filter((transaction) => {
+      const periodMatch = mode === 'daily'
+        ? dateKey(transaction.date) === period
+        : monthKey(transaction.date) === period;
+      const cashierMatch = cashier === 'ALL'
+        || cashierKey(transaction.cashier) === cashierKey(cashier);
+      return periodMatch && cashierMatch;
+    });
+
+    const expenses = filterExpenses(allExpenses, mode, period, cashier);
+    const products = aggregateProducts(transactions);
+    const materials = aggregateMaterials(products);
+    const revenue = transactions.reduce((sum, transaction) => sum + toNumber(transaction.total), 0);
+    const totalExpenses = expenses.reduce((sum, expense) => sum + toNumber(expense.amount), 0);
+    const totalCups = products.reduce((sum, product) => sum + toNumber(product.qty), 0);
+    const notes = Array.from(new Set(
+      transactions.map((transaction) => canonical(transaction.note)).filter(Boolean)
+    ));
+
+    return {
+      mode,
+      period,
+      periodLabel: formatPeriodLabel(mode, period),
+      cashier,
+      cashierLabel: cashier === 'ALL' ? 'Semua Kasir' : cashier,
+      transactions,
+      expenses,
+      products,
+      materials,
+      payments: aggregatePayments(transactions),
+      notes,
+      revenue,
+      totalExpenses,
+      netBalance: revenue - totalExpenses,
+      totalCups,
+      root
+    };
+  }
+
+  function activeReport() {
+    return buildReportData(
+      state.mode,
+      state.mode === 'daily' ? state.date : state.month,
+      state.cashier
+    );
+  }
+
+  function buildWhatsAppText(report) {
+    const type = report.mode === 'daily' ? 'HARIAN' : 'BULANAN';
+    const lines = [
+      `*LAPORAN PENJUALAN TE.CO — ${type}*`,
+      `Periode: ${report.periodLabel}`,
+      `Kasir: ${report.cashierLabel}`,
+      '',
+      `Total transaksi: ${report.transactions.length}`,
+      `Total cup terjual: *${formatQuantity(report.totalCups)} cup*`,
+      `Jumlah varian: *${report.products.length}*`,
+      `Omzet kotor: *${formatMoney(report.revenue)}*`,
+      `Total pengeluaran: *${formatMoney(report.totalExpenses)}*`,
+      `Saldo bersih: *${formatMoney(report.netBalance)}*`,
+      '',
+      '*TIPE PEMBAYARAN*'
+    ];
+
+    if (report.payments.length) {
+      report.payments.forEach((payment) => {
+        lines.push(`• ${payment.name}: ${payment.count} transaksi — ${formatMoney(payment.amount)}`);
+      });
+    } else {
+      lines.push('• Tidak ada pembayaran pada periode ini');
+    }
+
+    lines.push('', '*LAPORAN PENGELUARAN*');
+    if (report.expenses.length) {
+      report.expenses.forEach((expense) => {
+        lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note}`);
+      });
+    } else {
+      lines.push('• Tidak ada pengeluaran pada periode ini');
+    }
+
+    lines.push('', '*CATATAN*');
+    if (report.notes.length) report.notes.forEach((note) => lines.push(`• ${note}`));
+    else lines.push('• Tidak ada catatan');
+
+    lines.push('', '*REKAP VARIAN TERJUAL*');
+    if (report.products.length) {
+      report.products.forEach((product, index) => {
+        lines.push(`${index + 1}. ${product.name}: ${formatQuantity(product.qty)} cup`);
+      });
+    } else {
+      lines.push('• Tidak ada varian terjual');
+    }
+
+    lines.push('', '*ANALISIS BAHAN TERPAKAI*');
+    if (report.materials.concentrateMl > 0) {
+      lines.push(
+        `Konsentrat: ${formatQuantity(report.materials.concentrateMl)} ml ` +
+        `(+${formatQuantity(report.materials.concentrateBatches)} batch)`
+      );
+    }
+
+    if (report.materials.rows.length) {
+      report.materials.rows.forEach((material) => {
+        lines.push(`• ${material.material}: ${materialDisplay(material)}`);
+      });
+    } else {
+      lines.push('• Tidak ada bahan terpakai');
+    }
+
+    if (report.materials.unmapped.length) {
+      lines.push('', '*VARIAN BELUM DIPETAKAN KE RESEP*');
+      report.materials.unmapped.forEach((name) => lines.push(`• ${name}`));
+    }
+
+    lines.push('', `Dibuat otomatis oleh Te.Co POS v${VERSION}`);
+    return lines.join('\n');
+  }
+
+  function findOwnerWhatsApp(root) {
+    const exactKeys = [
+      'ownerWhatsapp', 'ownerWhatsApp', 'whatsappOwner', 'waOwner',
+      'ownerPhone', 'phoneOwner', 'noWhatsAppOwner', 'nomorWhatsAppOwner'
+    ];
+    const seen = new WeakSet();
+    let fallback = '';
+
+    function walk(node, depth) {
+      node = parseMaybeJson(node);
+      if (!node || typeof node !== 'object' || depth > 8 || seen.has(node)) return '';
+      seen.add(node);
+
+      for (const key of exactKeys) {
+        const value = first(node, [key]);
+        if (value) return String(value);
+      }
+
+      for (const [key, value] of Object.entries(node)) {
+        const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (/owner/.test(normalizedKey) && /(wa|whatsapp|phone|telepon)/.test(normalizedKey) && value) {
+          return String(value);
+        }
+        if (!fallback && /whatsapp|nomorwa|nowa/.test(normalizedKey) && value) fallback = String(value);
+      }
+
+      for (const value of Object.values(node)) {
+        const result = walk(value, depth + 1);
+        if (result) return result;
+      }
+      return '';
+    }
+
+    return walk(root, 0) || fallback;
+  }
+
+  function normalizeWhatsAppNumber(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+    else if (digits.startsWith('8')) digits = `62${digits}`;
+    return digits;
+  }
+
+  function sendWhatsAppReport() {
+    const report = activeReport();
+    const text = buildWhatsAppText(report);
+    const number = normalizeWhatsAppNumber(findOwnerWhatsApp(report.root));
+    const url = number
+      ? `https://wa.me/${number}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup && navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('Laporan disalin. Izinkan pop-up browser lalu klik WhatsApp lagi.');
+      });
+    }
+  }
+
+  function recipeNameForProduct(productName) {
+    const recipe = findRecipe(productName);
+    return recipe ? recipe.name : 'BELUM DIPETAKAN';
+  }
+
+  function materialKind(material) {
+    if (keyText(material.material).includes('CUP')) return 'Kemasan';
+    return material.kind || 'Bahan baku';
+  }
+
+  function reportSheets(report) {
+    const suffix = report.mode === 'daily' ? 'Harian' : 'Bulanan';
+    const summary = [
+      ['Keterangan', 'Nilai'],
+      ['Jenis Laporan', suffix],
+      ['Periode', report.periodLabel],
+      ['Kasir', report.cashierLabel],
+      ['Total Transaksi', report.transactions.length],
+      ['Total Cup', report.totalCups],
+      ['Jumlah Varian', report.products.length],
+      ['Omzet', report.revenue],
+      ['Total Pengeluaran', report.totalExpenses],
+      ['Saldo Bersih', report.netBalance],
+      ['Konsentrat Terpakai (ml)', report.materials.concentrateMl],
+      ['Perkiraan Batch Konsentrat', report.materials.concentrateBatches],
+      ['Asumsi Hasil 1 Batch (ml)', report.materials.concentrateYield],
+      ['Varian Belum Terpetakan', report.materials.unmapped.length],
+      ['Jumlah Catatan', report.notes.length]
+    ];
+
+    const variants = [['No', 'Varian', 'Total_Cup', 'Omzet_Item', 'Resep']];
+    report.products.forEach((product, index) => variants.push([
+      index + 1, product.name, product.qty, product.revenue,
+      recipeNameForProduct(product.name)
+    ]));
+
+    const materials = [['No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis', 'Dipakai_Oleh']];
+    let materialNo = 0;
+    if (report.materials.concentrateMl > 0) {
+      materials.push([
+        materialNo++, 'Konsentrat (kebutuhan produksi)',
+        report.materials.concentrateMl, 'ml',
+        `${formatQuantity(report.materials.concentrateMl)} ml`,
+        'Bahan antara', 'Produk berbasis konsentrat'
+      ]);
+    }
+    report.materials.rows.forEach((material) => materials.push([
+      materialNo++, material.material, material.qty, material.unit,
+      materialDisplay(material), materialKind(material),
+      material.products.join(', ')
+    ]));
+
+    const transactions = [[
+      'Tanggal', 'Waktu', 'ID_Transaksi', 'Kasir', 'Pembayaran', 'Catatan',
+      'Varian', 'Qty_Cup', 'Harga_Satuan', 'Subtotal_Item',
+      'Total_Transaksi', 'Sumber'
+    ]];
+    report.transactions.forEach((transaction) => {
+      transaction.items.forEach((item) => transactions.push([
+        dateKey(transaction.date), timeText(transaction.date), transaction.id,
+        transaction.cashier, transaction.payment, transaction.note || '',
+        item.name, item.qty, item.price, item.subtotal, transaction.total,
+        PRIMARY_STORAGE_KEY
+      ]));
+    });
+
+    const expenses = [['Tanggal', 'Waktu', 'ID_Pengeluaran', 'Kasir', 'Kategori', 'Catatan', 'Nominal']];
+    report.expenses.forEach((expense) => expenses.push([
+      dateKey(expense.date), timeText(expense.date), expense.id,
+      expense.cashier, expense.category, expense.note, expense.amount
+    ]));
+
+    const payments = [['No', 'Tipe_Pembayaran', 'Jumlah_Transaksi', 'Nominal']];
+    report.payments.forEach((payment, index) => payments.push([
+      index + 1, payment.name, payment.count, payment.amount
+    ]));
+
+    return {
+      [`Ringkasan ${suffix}`]: summary,
+      [`Varian ${suffix}`]: variants,
+      [`Bahan ${suffix}`]: materials,
+      [`Transaksi ${suffix}`]: transactions,
+      [`Pengeluaran ${suffix}`]: expenses,
+      [`Pembayaran ${suffix}`]: payments
+    };
+  }
+
+  function mappingSheet(reports) {
+    const map = new Map();
+    reports.forEach((report) => {
+      report.products.forEach((product) => {
+        map.set(keyText(product.name), [product.name, recipeNameForProduct(product.name)]);
+      });
+    });
+    const rows = [['No', 'Nama_Produk_Varian', 'Resep']];
+    Array.from(map.values())
+      .sort((a, b) => a[0].localeCompare(b[0], 'id'))
+      .forEach((row, index) => rows.push([index + 1, row[0], row[1]]));
+    return rows;
+  }
+
+  function masterRecipeSheet() {
+    const rows = [['Resep', 'Bahan', 'Jumlah_per_Cup_atau_Batch', 'Satuan']];
+    Object.entries(RECIPE_DATA.recipes).forEach(([recipeName, materials]) => {
+      materials.forEach((material) => rows.push([
+        recipeName, material.material, material.qty, material.unit
+      ]));
+    });
+    return rows;
+  }
+
+  function buildWorkbookSheets(reports) {
+    const sheets = {};
+    reports.forEach((report) => Object.assign(sheets, reportSheets(report)));
+    sheets['Mapping Produk'] = mappingSheet(reports);
+    sheets['Master Resep'] = masterRecipeSheet();
+    return sheets;
+  }
+
+  function autoColumns(rows) {
+    const columnCount = Math.max(1, ...rows.map((row) => row.length));
+    return Array.from({ length: columnCount }, (_, column) => {
+      const max = Math.max(8, ...rows.map((row) => String(row[column] == null ? '' : row[column]).length));
+      return { wch: Math.min(42, max + 2) };
+    });
+  }
+
+  let xlsxLoadingPromise = null;
+  function ensureXlsx() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (xlsxLoadingPromise) return xlsxLoadingPromise;
+
+    xlsxLoadingPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      script.async = true;
+      script.onload = () => window.XLSX ? resolve(window.XLSX) : reject(new Error('XLSX tidak tersedia'));
+      script.onerror = () => reject(new Error('Library XLSX gagal dimuat'));
+      document.head.appendChild(script);
+    });
+
+    return xlsxLoadingPromise;
+  }
+
+  function xmlEscape(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  function fallbackSpreadsheetXml(sheets, filename) {
+    const worksheets = Object.entries(sheets).map(([name, rows]) => {
+      const rowXml = rows.map((row) => {
+        const cells = row.map((value) => {
+          const isNumber = typeof value === 'number' && Number.isFinite(value);
+          return `<Cell><Data ss:Type="${isNumber ? 'Number' : 'String'}">${xmlEscape(value)}</Data></Cell>`;
+        }).join('');
+        return `<Row>${cells}</Row>`;
+      }).join('');
+      return `<Worksheet ss:Name="${xmlEscape(name.slice(0, 31))}"><Table>${rowXml}</Table></Worksheet>`;
+    }).join('');
+
+    const xml = `<?xml version="1.0"?>\n` +
+      `<?mso-application progid="Excel.Sheet"?>\n` +
+      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+      `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">${worksheets}</Workbook>`;
+
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename.replace(/\.xlsx$/i, '.xls');
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function exportReports(reports, filename) {
+    const sheets = buildWorkbookSheets(reports);
+
+    try {
+      const XLSX = await ensureXlsx();
+      const workbook = XLSX.utils.book_new();
+
+      Object.entries(sheets).forEach(([sheetName, rows]) => {
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        worksheet['!cols'] = autoColumns(rows);
+        if (rows.length && rows[0].length) {
+          worksheet['!autofilter'] = { ref: XLSX.utils.encode_range({
+            s: { r: 0, c: 0 },
+            e: { r: Math.max(0, rows.length - 1), c: Math.max(0, rows[0].length - 1) }
+          }) };
+        }
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
+      });
+
+      XLSX.writeFile(workbook, filename, { compression: true });
+    } catch (error) {
+      console.warn('[Te.Co Native] Export XLSX gagal, memakai format Excel XML:', error);
+      fallbackSpreadsheetXml(sheets, filename);
+    }
+  }
+
+  function exportActiveSheets() {
+    const report = activeReport();
+    const type = report.mode === 'daily' ? 'harian' : 'bulanan';
+    exportReports([report], `Laporan_TeCo_${type}_${report.period}.xlsx`);
+  }
+
+  function exportBothSheets() {
+    const daily = buildReportData('daily', state.date, state.cashier);
+    const monthly = buildReportData('monthly', state.month, state.cashier);
+    exportReports(
+      [daily, monthly],
+      `Laporan_TeCo_both_${state.date}_${state.month}.xlsx`
+    );
+  }
+
   function downloadCsv(filename, rows) {
     const text = '\ufeff' + rows
       .map((row) => row.map((cell) => {
@@ -934,48 +1552,7 @@
   }
 
   function exportCurrent() {
-    const root = getPrimaryRoot();
-    const allTransactions = extractTransactions(root);
-    const filtered = filterTransactions(allTransactions);
-    const products = aggregateProducts(filtered);
-    const materialResult = aggregateMaterials(products);
-
-    const rows = [
-      ['Laporan Te.Co Pandawa', state.mode === 'daily' ? state.date : state.month],
-      ['Kasir', state.cashier === 'ALL' ? 'Semua Kasir' : state.cashier],
-      [],
-      ['TRANSAKSI'],
-      ['Tanggal', 'Kasir', 'Produk', 'Total']
-    ];
-
-    filtered.forEach((transaction) => {
-      rows.push([
-        transaction.date.toISOString(),
-        transaction.cashier,
-        transaction.items.map((item) => `${item.name} x${item.qty}`).join(', '),
-        transaction.total
-      ]);
-    });
-
-    rows.push([], ['PRODUK'], ['Produk', 'Cup', 'Omzet']);
-    products.forEach((product) => {
-      rows.push([product.name, product.qty, product.revenue]);
-    });
-
-    rows.push([], ['BAHAN'], ['Bahan', 'Jumlah', 'Satuan', 'Dipakai oleh']);
-    materialResult.rows.forEach((material) => {
-      rows.push([
-        material.material,
-        material.qty,
-        material.unit,
-        material.products.join(', ')
-      ]);
-    });
-
-    downloadCsv(
-      `teco-${state.mode}-${state.mode === 'daily' ? state.date : state.month}.csv`,
-      rows
-    );
+    exportActiveSheets();
   }
 
   function render() {
@@ -999,8 +1576,17 @@
     const filtered = filterTransactions(allTransactions);
     const products = aggregateProducts(filtered);
     const materialResult = aggregateMaterials(products);
+    const allExpenses = extractExpenses(primaryRoot);
+    const filteredExpenses = filterExpenses(
+      allExpenses,
+      state.mode,
+      state.mode === 'daily' ? state.date : state.month,
+      state.cashier
+    );
 
     const revenue = filtered.reduce((sum, transaction) => sum + transaction.total, 0);
+    const expensesTotal = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const netBalance = revenue - expensesTotal;
     const cups = products.reduce((sum, product) => sum + product.qty, 0);
 
     const latestInfo = allTransactions.length
@@ -1038,7 +1624,9 @@
         </label>
 
         <button type="button" id="tecoNativeRefresh" class="secondary">Muat Ulang</button>
-        <button type="button" id="tecoNativeExport">Export CSV</button>
+        <button type="button" id="tecoNativeWhatsApp" class="whatsapp">WhatsApp</button>
+        <button type="button" id="tecoNativeExport">Excel / Sheets</button>
+        <button type="button" id="tecoNativeExportBoth" class="combined">Harian + Bulanan</button>
       </div>
 
       <div class="teco-native-info">
@@ -1051,7 +1639,8 @@
         <article><span>Total cup</span><strong>${formatQuantity(cups)}</strong></article>
         <article><span>Varian terjual</span><strong>${products.length}</strong></article>
         <article><span>Omzet</span><strong>${formatMoney(revenue)}</strong></article>
-        <article><span>Jenis bahan</span><strong>${materialResult.rows.length}</strong></article>
+        <article><span>Pengeluaran</span><strong>${formatMoney(expensesTotal)}</strong></article>
+        <article><span>Saldo bersih</span><strong>${formatMoney(netBalance)}</strong></article>
       </div>
 
       ${materialResult.unmapped.length ? `
@@ -1132,7 +1721,9 @@
       refreshFromPrimaryStorage();
     });
 
-    document.getElementById('tecoNativeExport')?.addEventListener('click', exportCurrent);
+    document.getElementById('tecoNativeWhatsApp')?.addEventListener('click', sendWhatsAppReport);
+    document.getElementById('tecoNativeExport')?.addEventListener('click', exportActiveSheets);
+    document.getElementById('tecoNativeExportBoth')?.addEventListener('click', exportBothSheets);
   }
 
   function scheduleRender(delay) {
@@ -1236,6 +1827,10 @@
       version: VERSION,
       refresh: refreshFromPrimaryStorage,
       getTransactions: () => extractTransactions(getPrimaryRoot()),
+      getWhatsAppText: () => buildWhatsAppText(activeReport()),
+      sendWhatsApp: sendWhatsAppReport,
+      exportSheets: exportActiveSheets,
+      exportBothSheets,
       getStatus: () => {
         const transactions = extractTransactions(getPrimaryRoot());
         return {

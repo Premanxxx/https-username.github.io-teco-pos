@@ -98,7 +98,7 @@
 }
 .teco-native-cards {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 9px;
   margin: 8px 0 12px;
 }
@@ -205,4 +205,16 @@ body.dark .teco-native-controls {
   .teco-native-grid { grid-template-columns: 1fr; }
   .teco-native-head { flex-direction: column; }
   .teco-native-status { white-space: normal; }
+}
+
+.teco-native-controls button.whatsapp {
+  border-color: #16a34a;
+  background: #16a34a;
+}
+.teco-native-controls button.combined {
+  border-color: #0f766e;
+  background: #0f766e;
+}
+@media (max-width: 1050px) {
+  .teco-native-cards { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
 }
