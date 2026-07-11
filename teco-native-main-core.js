@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.4.0';
+  const VERSION = '3.0.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -12,9 +12,11 @@
     mode: 'daily',
     date: '',
     month: '',
+    weekDate: '',
     cashier: 'ALL',
     dateTouched: false,
     monthTouched: false,
+    weekTouched: false,
     cachedRoot: null,
     renderTimer: null,
     observer: null,
@@ -274,10 +276,10 @@
     const number = Number(text);
     return Number.isFinite(number) ? number : 0;
   }
-
   function canonical(value) {
     return String(value == null ? '' : value)
       .replace(/\bSakata\b/gi, 'Sakala')
+      .replace(/\bKopi\s+Milo\b/gi, 'Coffee Milo')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -436,6 +438,41 @@
 
   function currentMonthKey() {
     return monthKey(new Date());
+  }
+
+
+  function dateFromKey(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const date = new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00+07:00`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function weekRange(period) {
+    const anchor = dateFromKey(period) || dateFromKey(todayKey()) || new Date();
+    const day = anchor.getDay();
+    const offsetToMonday = day === 0 ? -6 : 1 - day;
+    const start = new Date(anchor.getTime());
+    start.setDate(start.getDate() + offsetToMonday);
+    const end = new Date(start.getTime());
+    end.setDate(end.getDate() + 6);
+    return {
+      start,
+      end,
+      startKey: dateKey(start),
+      endKey: dateKey(end)
+    };
+  }
+
+  function matchesPeriod(date, mode, period) {
+    if (mode === 'daily') return dateKey(date) === period;
+    if (mode === 'monthly') return monthKey(date) === period;
+    if (mode === 'weekly') {
+      const range = weekRange(period);
+      const key = dateKey(date);
+      return key >= range.startKey && key <= range.endKey;
+    }
+    return false;
   }
 
   function asArray(value) {
@@ -875,7 +912,6 @@
   function variantOverride(productName) {
     return runtimeConfig.variantOverrides[keyText(productName)] || {};
   }
-
   function findRecipe(productName, forcedRecipeKey) {
     const key = keyText(productName);
     const forcedKey = keyText(forcedRecipeKey);
@@ -883,6 +919,16 @@
 
     if (forcedKey && runtimeRecipeData.recipes[forcedKey]) {
       return { name: forcedKey, rows: runtimeRecipeData.recipes[forcedKey] };
+    }
+
+    const aliases = [
+      { test: /\b(COFFEE|KOPI)\s+MILO\b/, recipe: 'COFFEE MILO' },
+      { test: /\bMILO\s+(MALAYSIA|ORIGINAL)\b/, recipe: 'MILO MALAYSIA' }
+    ];
+    for (const alias of aliases) {
+      if (alias.test.test(key) && runtimeRecipeData.recipes[alias.recipe]) {
+        return { name: alias.recipe, rows: runtimeRecipeData.recipes[alias.recipe] };
+      }
     }
 
     if (runtimeRecipeData.recipes[key]) {
@@ -899,28 +945,19 @@
       }
     }
 
-    if (
-      /\bMILO\b/.test(key) &&
-      /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key)
-    ) {
+    if (/\bMILO\b/.test(key) && /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key)) {
       const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('MILO') && candidate.includes('BUTTERSCOTCH'));
       if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
     }
 
-    if (
-      /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key) &&
-      !/\bMILO\b/.test(key)
-    ) {
+    if (/(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(key) && !/\bMILO\b/.test(key)) {
       const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('PREMIUM SERIES'));
       if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
     }
 
-    if (
-      /(MATCHA|CHOCO|TARO|RED ?VELVET)/.test(key) &&
-      !/(MATCHAPRESSO|MATCHA AREN)/.test(key)
-    ) {
+    if (/(MATCHA|CHOCO|TARO|RED ?VELVET)/.test(key) && !/(MATCHAPRESSO|MATCHA AREN)/.test(key)) {
       const recipeKey = Object.keys(runtimeRecipeData.recipes)
         .find((candidate) => candidate.includes('NON COFFEE SERIES'));
       if (recipeKey) return { name: recipeKey, rows: runtimeRecipeData.recipes[recipeKey] };
@@ -1089,12 +1126,10 @@
     refreshRuntimeConfig(root);
     return true;
   }
-
   function adjustmentMatches(adjustment, mode, period, cashier) {
     const date = canonical(adjustment.date);
-    const periodMatch = mode === 'daily'
-      ? date === period
-      : date.slice(0, 7) === period;
+    const parsedDate = dateFromKey(date);
+    const periodMatch = parsedDate ? matchesPeriod(parsedDate, mode, period) : false;
     const cashierMatch = cashier === 'ALL'
       || cashierKey(adjustment.cashier) === cashierKey(cashier)
       || cashierKey(adjustment.cashier) === 'SEMUA';
@@ -1128,16 +1163,16 @@
   function cashierKey(value) {
     return keyText(value).replace(/\s+/g, '');
   }
-
   function filterTransactions(transactions) {
     return transactions.filter((transaction) => {
-      const periodMatch = state.mode === 'daily'
-        ? dateKey(transaction.date) === state.date
-        : monthKey(transaction.date) === state.month;
-
+      const period = state.mode === 'daily'
+        ? state.date
+        : state.mode === 'weekly'
+          ? state.weekDate
+          : state.month;
+      const periodMatch = matchesPeriod(transaction.date, state.mode, period);
       const cashierMatch = state.cashier === 'ALL'
         || cashierKey(transaction.cashier) === cashierKey(state.cashier);
-
       return periodMatch && cashierMatch;
     });
   }
@@ -1305,22 +1340,18 @@
       </tr>
     `).join('');
   }
-
   function filterExpenses(expenses, mode, period, cashier) {
     return expenses.filter((expense) => {
-      const periodMatch = mode === 'daily'
-        ? dateKey(expense.date) === period
-        : monthKey(expense.date) === period;
+      const periodMatch = matchesPeriod(expense.date, mode, period);
       const cashierMatch = cashier === 'ALL'
         || cashierKey(expense.cashier) === cashierKey(cashier);
       return periodMatch && cashierMatch;
     });
   }
-
   function formatPeriodLabel(mode, period) {
     if (mode === 'daily') {
-      const date = new Date(`${period}T12:00:00+07:00`);
-      if (Number.isNaN(date.getTime())) return period;
+      const date = dateFromKey(period);
+      if (!date) return period;
       return new Intl.DateTimeFormat('id-ID', {
         timeZone: TIME_ZONE,
         weekday: 'long',
@@ -1328,6 +1359,18 @@
         month: 'long',
         year: 'numeric'
       }).format(date);
+    }
+
+    if (mode === 'weekly') {
+      const range = weekRange(period);
+      const startMonth = new Intl.DateTimeFormat('id-ID', { timeZone: TIME_ZONE, month: 'long' }).format(range.start);
+      const endMonth = new Intl.DateTimeFormat('id-ID', { timeZone: TIME_ZONE, month: 'long' }).format(range.end);
+      const year = new Intl.DateTimeFormat('id-ID', { timeZone: TIME_ZONE, year: 'numeric' }).format(range.end);
+      const startDay = new Intl.DateTimeFormat('id-ID', { timeZone: TIME_ZONE, day: 'numeric' }).format(range.start);
+      const endDay = new Intl.DateTimeFormat('id-ID', { timeZone: TIME_ZONE, day: 'numeric' }).format(range.end);
+      return startMonth === endMonth
+        ? `${startDay}–${endDay} ${endMonth} ${year}`
+        : `${startDay} ${startMonth}–${endDay} ${endMonth} ${year}`;
     }
 
     const date = new Date(`${period}-01T12:00:00+07:00`);
@@ -1377,7 +1420,6 @@
     });
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }
-
   function buildReportData(mode, period, cashier) {
     const root = getPrimaryRoot();
     detectSession(root);
@@ -1386,9 +1428,7 @@
     const allExpenses = extractExpenses(root);
 
     const transactions = allTransactions.filter((transaction) => {
-      const periodMatch = mode === 'daily'
-        ? dateKey(transaction.date) === period
-        : monthKey(transaction.date) === period;
+      const periodMatch = matchesPeriod(transaction.date, mode, period);
       const cashierMatch = cashier === 'ALL'
         || cashierKey(transaction.cashier) === cashierKey(cashier);
       return periodMatch && cashierMatch;
@@ -1433,17 +1473,17 @@
       root
     };
   }
-
   function activeReport() {
-    return buildReportData(
-      state.mode,
-      state.mode === 'daily' ? state.date : state.month,
-      state.cashier
-    );
+    const period = state.mode === 'daily'
+      ? state.date
+      : state.mode === 'weekly'
+        ? state.weekDate
+        : state.month;
+    return buildReportData(state.mode, period, state.cashier);
   }
-
   function buildWhatsAppText(report) {
-    const type = report.mode === 'daily' ? 'HARIAN' : 'BULANAN';
+    const typeMap = { daily: 'HARIAN', weekly: 'MINGGUAN', monthly: 'BULANAN' };
+    const type = typeMap[report.mode] || String(report.mode || '').toUpperCase();
     const lines = [
       `*LAPORAN PENJUALAN TE.CO — ${type}*`,
       `Periode: ${report.periodLabel}`,
@@ -1470,7 +1510,7 @@
     lines.push('', '*LAPORAN PENGELUARAN*');
     if (report.expenses.length) {
       report.expenses.forEach((expense) => {
-        lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note}`);
+        lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note || '-'}`);
       });
     } else {
       lines.push('• Tidak ada pengeluaran pada periode ini');
@@ -1480,8 +1520,8 @@
     if (report.notes.length) report.notes.forEach((note) => lines.push(`• ${note}`));
     else lines.push('• Tidak ada catatan');
 
-    lines.push('', '*PENYESUAIAN LAPORAN*');
     if (report.adjustments.length) {
+      lines.push('', '*PENYESUAIAN LAPORAN*');
       report.adjustments.forEach((row) => {
         const parts = [];
         if (row.cupDelta) parts.push(`cup ${row.cupDelta > 0 ? '+' : ''}${formatQuantity(row.cupDelta)}`);
@@ -1489,8 +1529,6 @@
         if (row.expenseDelta) parts.push(`pengeluaran ${row.expenseDelta > 0 ? '+' : ''}${formatMoney(row.expenseDelta)}`);
         lines.push(`• ${row.date} — ${parts.join(', ') || 'catatan'}${row.note ? ` — ${row.note}` : ''}`);
       });
-    } else {
-      lines.push('• Tidak ada penyesuaian pada periode ini');
     }
 
     lines.push('', '*REKAP VARIAN TERJUAL*');
@@ -1523,7 +1561,7 @@
       report.materials.unmapped.forEach((name) => lines.push(`• ${name}`));
     }
 
-    lines.push('', `Dibuat otomatis oleh Te.Co POS v${VERSION}`);
+    lines.push('', `Dibuat otomatis oleh Te.Co Analytics v${VERSION}`);
     return lines.join('\n');
   }
 
@@ -1570,9 +1608,10 @@
     else if (digits.startsWith('8')) digits = `62${digits}`;
     return digits;
   }
-
-  function sendWhatsAppReport() {
-    const report = activeReport();
+  function sendWhatsAppReport(reportOverride) {
+    const report = reportOverride && reportOverride.transactions
+      ? reportOverride
+      : activeReport();
     const text = buildWhatsAppText(report);
     const number = normalizeWhatsAppNumber(findOwnerWhatsApp(report.root));
     const url = number
@@ -1584,6 +1623,7 @@
         alert('Laporan disalin. Izinkan pop-up browser lalu klik WhatsApp lagi.');
       });
     }
+    return text;
   }
 
   function recipeNameForProduct(productName, forcedRecipeKey) {
@@ -1597,7 +1637,7 @@
   }
 
   function reportSheets(report) {
-    const suffix = report.mode === 'daily' ? 'Harian' : 'Bulanan';
+    const suffix = report.mode === 'daily' ? 'Harian' : report.mode === 'weekly' ? 'Mingguan' : 'Bulanan';
     const summary = [
       ['Keterangan', 'Nilai'],
       ['Jenis Laporan', suffix],
@@ -1806,10 +1846,9 @@
       fallbackSpreadsheetXml(sheets, filename);
     }
   }
-
   function exportActiveSheets() {
     const report = activeReport();
-    const type = report.mode === 'daily' ? 'harian' : 'bulanan';
+    const type = report.mode === 'daily' ? 'harian' : report.mode === 'weekly' ? 'mingguan' : 'bulanan';
     exportReports([report], `Laporan_TeCo_${type}_${report.period}.xlsx`);
   }
 
@@ -1818,17 +1857,25 @@
     exportReports([report], `Laporan_TeCo_harian_${state.date}.xlsx`);
   }
 
+
+
+  function exportWeeklySheets() {
+    const report = buildReportData('weekly', state.weekDate, state.cashier);
+    const range = weekRange(state.weekDate);
+    exportReports([report], `Laporan_TeCo_mingguan_${range.startKey}_${range.endKey}.xlsx`);
+  }
+
   function exportMonthlySheets() {
     const report = buildReportData('monthly', state.month, state.cashier);
     exportReports([report], `Laporan_TeCo_bulanan_${state.month}.xlsx`);
   }
-
   function exportBothSheets() {
     const daily = buildReportData('daily', state.date, state.cashier);
+    const weekly = buildReportData('weekly', state.weekDate, state.cashier);
     const monthly = buildReportData('monthly', state.month, state.cashier);
     exportReports(
-      [daily, monthly],
-      `Laporan_TeCo_both_${state.date}_${state.month}.xlsx`
+      [daily, weekly, monthly],
+      `Laporan_TeCo_lengkap_${state.date}_${state.month}.xlsx`
     );
   }
 
@@ -2127,7 +2174,6 @@
       button.onclick = () => button.closest('tr')?.remove();
     });
   }
-
   function render() {
     if (!ensureMounted()) return;
 
@@ -2138,29 +2184,24 @@
     refreshRuntimeConfig(primaryRoot);
 
     if (!state.date) state.date = latestTransactionDate(allTransactions);
+    if (!state.weekDate) state.weekDate = latestTransactionDate(allTransactions);
     if (!state.month) state.month = latestTransactionMonth(allTransactions);
 
-    if (!state.dateTouched && allTransactions.length) {
-      state.date = latestTransactionDate(allTransactions);
-    }
+    if (!state.dateTouched && allTransactions.length) state.date = latestTransactionDate(allTransactions);
+    if (!state.weekTouched && allTransactions.length) state.weekDate = latestTransactionDate(allTransactions);
+    if (!state.monthTouched && allTransactions.length) state.month = latestTransactionMonth(allTransactions);
 
-    if (!state.monthTouched && allTransactions.length) {
-      state.month = latestTransactionMonth(allTransactions);
-    }
-
-    if (session.role !== 'admin' && session.name) {
-      state.cashier = session.name;
-    }
+    if (session.role !== 'admin' && session.name) state.cashier = session.name;
 
     const report = activeReport();
     const filtered = report.transactions;
     const products = report.products;
     const materialResult = report.materials;
-    const filteredExpenses = report.expenses;
     const revenue = report.revenue;
     const expensesTotal = report.totalExpenses;
     const netBalance = report.netBalance;
     const cups = report.totalCups;
+    const activePeriod = state.mode === 'daily' ? state.date : state.mode === 'weekly' ? state.weekDate : state.month;
 
     const latestInfo = allTransactions.length
       ? `Transaksi terbaru: ${escapeHtml(latestTransactionDate(allTransactions))}`
@@ -2170,7 +2211,7 @@
       <div class="teco-native-head">
         <div>
           <h3>Analisis Penjualan & Bahan</h3>
-          <p>Fitur utama v${VERSION}. Menggunakan satu sumber transaksi POS tanpa add-on dan tanpa pemuatan Firebase kedua.</p>
+          <p>Fitur utama v${VERSION}. Laporan WhatsApp, Excel, rekap varian, dan bahan memakai satu sumber data POS.</p>
         </div>
         <span class="teco-native-status">${allTransactions.length} transaksi terbaca</span>
       </div>
@@ -2178,12 +2219,18 @@
       <div class="teco-native-controls">
         <div class="teco-native-tabs">
           <button type="button" data-native-mode="daily" class="${state.mode === 'daily' ? 'active' : ''}">Harian</button>
+          <button type="button" data-native-mode="weekly" class="${state.mode === 'weekly' ? 'active' : ''}">Mingguan</button>
           <button type="button" data-native-mode="monthly" class="${state.mode === 'monthly' ? 'active' : ''}">Bulanan</button>
         </div>
 
         <label class="${state.mode === 'daily' ? '' : 'hidden'}">
           Tanggal
           <input id="tecoNativeDate" type="date" value="${escapeHtml(state.date)}">
+        </label>
+
+        <label class="${state.mode === 'weekly' ? '' : 'hidden'}">
+          Tanggal dalam minggu
+          <input id="tecoNativeWeek" type="date" value="${escapeHtml(state.weekDate)}">
         </label>
 
         <label class="${state.mode === 'monthly' ? '' : 'hidden'}">
@@ -2198,14 +2245,16 @@
 
         <button type="button" id="tecoNativeRefresh" class="secondary">Muat Ulang</button>
         <button type="button" id="tecoNativeWhatsApp" class="whatsapp">WhatsApp</button>
+        <button type="button" id="tecoNativeExportActive">Excel Aktif</button>
         <button type="button" id="tecoNativeExportDaily">Excel Harian</button>
+        <button type="button" id="tecoNativeExportWeekly">Excel Mingguan</button>
         <button type="button" id="tecoNativeExportMonthly">Excel Bulanan</button>
         ${session.role === 'admin' ? '<button type="button" id="tecoNativeAdminEdit" class="admin-edit">Edit Varian & Bahan</button>' : ''}
       </div>
 
       <div class="teco-native-info">
         <span>${latestInfo}</span>
-        <span>Periode aktif: ${escapeHtml(state.mode === 'daily' ? state.date : state.month)}</span>
+        <span>Periode aktif: ${escapeHtml(formatPeriodLabel(state.mode, activePeriod))}</span>
       </div>
 
       <div class="teco-native-cards">
@@ -2247,7 +2296,6 @@
         </section>
       </div>
 
-
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>
         <div class="teco-native-table-wrap">
@@ -2277,22 +2325,25 @@
     });
 
     const dateInput = document.getElementById('tecoNativeDate');
-    if (dateInput) {
-      dateInput.addEventListener('change', () => {
-        state.date = dateInput.value;
-        state.dateTouched = true;
-        render();
-      });
-    }
+    if (dateInput) dateInput.addEventListener('change', () => {
+      state.date = dateInput.value;
+      state.dateTouched = true;
+      render();
+    });
+
+    const weekInput = document.getElementById('tecoNativeWeek');
+    if (weekInput) weekInput.addEventListener('change', () => {
+      state.weekDate = weekInput.value;
+      state.weekTouched = true;
+      render();
+    });
 
     const monthInput = document.getElementById('tecoNativeMonth');
-    if (monthInput) {
-      monthInput.addEventListener('change', () => {
-        state.month = monthInput.value;
-        state.monthTouched = true;
-        render();
-      });
-    }
+    if (monthInput) monthInput.addEventListener('change', () => {
+      state.month = monthInput.value;
+      state.monthTouched = true;
+      render();
+    });
 
     const cashierSelect = document.getElementById('tecoNativeCashier');
     if (cashierSelect) {
@@ -2303,12 +2354,11 @@
       });
     }
 
-    document.getElementById('tecoNativeRefresh')?.addEventListener('click', () => {
-      refreshFromPrimaryStorage();
-    });
-
-    document.getElementById('tecoNativeWhatsApp')?.addEventListener('click', sendWhatsAppReport);
+    document.getElementById('tecoNativeRefresh')?.addEventListener('click', refreshFromPrimaryStorage);
+    document.getElementById('tecoNativeWhatsApp')?.addEventListener('click', () => sendWhatsAppReport());
+    document.getElementById('tecoNativeExportActive')?.addEventListener('click', exportActiveSheets);
     document.getElementById('tecoNativeExportDaily')?.addEventListener('click', exportDailySheets);
+    document.getElementById('tecoNativeExportWeekly')?.addEventListener('click', exportWeeklySheets);
     document.getElementById('tecoNativeExportMonthly')?.addEventListener('click', exportMonthlySheets);
     document.getElementById('tecoNativeAdminEdit')?.addEventListener('click', renderAdminModal);
     document.getElementById('tecoNativeAddAdjustment')?.addEventListener('click', () => { state.editorTab = 'adjustments'; renderAdminModal(); });
@@ -2416,13 +2466,30 @@
       version: VERSION,
       refresh: refreshFromPrimaryStorage,
       getTransactions: () => extractTransactions(getPrimaryRoot()),
+      getReport: (mode, period, cashier) => buildReportData(mode, period, cashier || 'ALL'),
       getWhatsAppText: () => buildWhatsAppText(activeReport()),
+      getWhatsAppTextFor: (mode, period, cashier) => buildWhatsAppText(buildReportData(mode, period, cashier || 'ALL')),
       sendWhatsApp: sendWhatsAppReport,
+      sendWhatsAppFor: (mode, period, cashier) => sendWhatsAppReport(buildReportData(mode, period, cashier || 'ALL')),
       exportSheets: exportActiveSheets,
+      exportReport: (mode, period, cashier) => {
+        const report = buildReportData(mode, period, cashier || 'ALL');
+        const type = mode === 'daily' ? 'harian' : mode === 'weekly' ? 'mingguan' : 'bulanan';
+        return exportReports([report], `Laporan_TeCo_${type}_${period}.xlsx`);
+      },
       exportDailySheets,
+      exportWeeklySheets,
       exportMonthlySheets,
       exportBothSheets,
       openAdminEditor: renderAdminModal,
+      setMode: (mode, period, cashier) => {
+        if (['daily', 'weekly', 'monthly'].includes(mode)) state.mode = mode;
+        if (mode === 'daily' && period) { state.date = period; state.dateTouched = true; }
+        if (mode === 'weekly' && period) { state.weekDate = period; state.weekTouched = true; }
+        if (mode === 'monthly' && period) { state.month = period; state.monthTouched = true; }
+        if (cashier) state.cashier = cashier;
+        render();
+      },
       getStatus: () => {
         const transactions = extractTransactions(getPrimaryRoot());
         return {
@@ -2432,6 +2499,7 @@
           latestDate: transactions.length ? latestTransactionDate(transactions) : null,
           mode: state.mode,
           selectedDate: state.date,
+          selectedWeekDate: state.weekDate,
           selectedMonth: state.month,
           cashier: state.cashier,
           role: state.session.role,

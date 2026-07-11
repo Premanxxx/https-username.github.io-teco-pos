@@ -1,12 +1,13 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "source": "HPP_Resep_Bahan_Penggunaan.xlsx",
   "timezone": "Asia/Jakarta",
   "concentrateBatchYieldMl": 1000,
   "notes": [
     "Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.",
-    "Cup + Tutup dihitung otomatis 1 set untuk setiap cup terjual, termasuk resep KOPI MILO yang tidak mencantumkan kemasan.",
-    "Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren."
+    "Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren.",
+    "Nama resep KOPI MILO dinormalisasi menjadi COFFEE MILO agar sesuai dengan nama menu.",
+    "MILO MALAYSIA memakai resep Milo original tanpa sirup rasa."
   ],
   "recipes": {
     "KONSENTRAT": [
@@ -242,33 +243,6 @@
         "unit": "pcs"
       }
     ],
-    "KOPI MILO": [
-      {
-        "material": "Kental Manis",
-        "qty": 10.0,
-        "unit": "ml"
-      },
-      {
-        "material": "Robusta",
-        "qty": 2.0,
-        "unit": "gr"
-      },
-      {
-        "material": "Milo",
-        "qty": 35.0,
-        "unit": "gr"
-      },
-      {
-        "material": "Air Hangat",
-        "qty": 50.0,
-        "unit": "ml"
-      },
-      {
-        "material": "UHT",
-        "qty": 50.0,
-        "unit": "ml"
-      }
-    ],
     "MILO BUTTERSCOTCH, CARAMEL, HAZELNUT": [
       {
         "material": "Sirup",
@@ -412,6 +386,60 @@
         "material": "Gula Aren",
         "qty": 10.0,
         "unit": "ml"
+      }
+    ],
+    "COFFEE MILO": [
+      {
+        "material": "Kental Manis",
+        "qty": 10.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Robusta",
+        "qty": 2.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Milo",
+        "qty": 35.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
+      }
+    ],
+    "MILO MALAYSIA": [
+      {
+        "material": "Milo",
+        "qty": 35.0,
+        "unit": "gr"
+      },
+      {
+        "material": "Air Hangat",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "UHT",
+        "qty": 50.0,
+        "unit": "ml"
+      },
+      {
+        "material": "Cup + Tutup",
+        "qty": 1.0,
+        "unit": "pcs"
       }
     ]
   }

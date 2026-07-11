@@ -1,3 +1,14 @@
+# v3.0.0 — 12 Juli 2026
+
+- Menambahkan laporan WhatsApp dan Excel harian, mingguan, dan bulanan dengan satu mesin analisis.
+- Menambahkan pemilih bulan untuk export laporan.
+- Mengganti resep KOPI MILO menjadi COFFEE MILO.
+- Menambahkan resep MILO MALAYSIA tanpa sirup rasa.
+- Memperbaiki transaksi gagal tersimpan/hilang melalui ID unik, local-first save, IndexedDB emergency recovery, dan merge Firebase.
+- Mengganti sinkronisasi `set()` yang menimpa data menjadi transaksi merge-safe dengan tombstone penghapusan.
+- Menambahkan backup Firebase harian, backup manual, dan export JSON.
+- Menambahkan Firebase Anonymous Authentication dan rules contoh agar database tidak perlu dibuka untuk publik.
+
 # Changelog
 
 ## v1.2.3

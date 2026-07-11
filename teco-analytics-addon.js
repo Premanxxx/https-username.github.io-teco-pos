@@ -28,7 +28,7 @@
     'NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)',
     'MATCHAPRESSO',
     'MATCHA AREN',
-    'KOPI MILO',
+    'COFFEE MILO',
     'MILO BUTTERSCOTCH, CARAMEL, HAZELNUT',
     'REDBERRYCANO',
     'GOLDEN DRIFT',
@@ -98,12 +98,18 @@
       { material: 'UHT', qty: 100, unit: 'ml' },
       { material: 'Cup + Tutup', qty: 1, unit: 'pcs' }
     ],
-    'KOPI MILO': [
+    'COFFEE MILO': [
       { material: 'Kental Manis', qty: 10, unit: 'ml' },
       { material: 'Robusta', qty: 2, unit: 'gr' },
       { material: 'Milo', qty: 35, unit: 'gr' },
       { material: 'Air Hangat', qty: 50, unit: 'ml' },
       { material: 'UHT', qty: 50, unit: 'ml' }
+    ],
+    'MILO MALAYSIA': [
+      { material: 'Milo', qty: 35, unit: 'gr' },
+      { material: 'Air Hangat', qty: 50, unit: 'ml' },
+      { material: 'UHT', qty: 50, unit: 'ml' },
+      { material: 'Cup + Tutup', qty: 1, unit: 'pcs' }
     ],
     'MILO BUTTERSCOTCH, CARAMEL, HAZELNUT': [
       { material: 'Sirup', qty: 15, unit: 'ml' },
@@ -1064,7 +1070,8 @@
 
     if (/MATCHA\s*PRESSO/.test(normalized)) return 'MATCHAPRESSO';
     if (/MATCHA.*AREN|AREN.*MATCHA/.test(normalized)) return 'MATCHA AREN';
-    if (/KOPI.*MILO|MILO.*KOPI/.test(normalized)) return 'KOPI MILO';
+    if (/(KOPI|COFFEE).*MILO|MILO.*(KOPI|COFFEE)/.test(normalized)) return 'COFFEE MILO';
+    if (/MILO.*MALAYSIA|MILO.*ORIGINAL/.test(normalized)) return 'MILO MALAYSIA';
     if (/MILO/.test(normalized) && /(BUTTERSCOTCH|CARAMEL|HAZELNUT)/.test(normalized)) return 'MILO BUTTERSCOTCH, CARAMEL, HAZELNUT';
     if (/REDBERRY|RED\s*BERRY/.test(normalized)) return 'REDBERRYCANO';
     if (/GOLDEN.*DRIFT/.test(normalized)) return 'GOLDEN DRIFT';
@@ -1966,7 +1973,7 @@
     const html = Object.entries(RECIPES).map(([name, items]) => `
       <div class="ta-recipe"><h4>${escapeHtml(name)}</h4><ul>${items.map((item) => `<li>${escapeHtml(item.material)} — ${escapeHtml(formatMeasurement(item.qty, item.unit))}</li>`).join('')}</ul></div>`).join('');
     content.innerHTML = `
-      <div class="ta-note" style="margin-bottom:12px">Resep diambil dari file <strong>HPP_Resep_Bahan_Penggunaan.xlsx</strong>. Ejaan “Fruktosaa” dan “Gula Arenn” dinormalisasi. Kemasan dihitung otomatis satu set per cup, termasuk Kopi Milo.</div>
+      <div class="ta-note" style="margin-bottom:12px">Resep diambil dari file <strong>HPP_Resep_Bahan_Penggunaan.xlsx</strong>. Ejaan “Fruktosaa” dan “Gula Arenn” dinormalisasi. Kemasan dihitung otomatis satu set per cup, termasuk Coffee Milo.</div>
       <section class="ta-panel"><h3>Daftar Resep</h3><div class="ta-pad">${html}</div></section>`;
   }
 

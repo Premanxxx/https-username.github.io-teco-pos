@@ -68,7 +68,7 @@ Masuk sebagai Admin, buka **Analisis Penjualan → Pengaturan**, lalu periksa:
 
 - `Fruktosaa` dirapikan menjadi `Fruktosa`.
 - `Gula Arenn` dirapikan menjadi `Gula Aren`.
-- `Cup + Tutup` dihitung otomatis satu set untuk setiap cup terjual, termasuk `KOPI MILO` yang tidak mencantumkan kemasan pada file sumber.
+- `Cup + Tutup` dihitung otomatis satu set untuk setiap cup terjual, termasuk `COFFEE MILO` yang tidak mencantumkan kemasan pada file sumber.
 - Bahan `Konsentrat` dapat diuraikan menjadi Kental Manis, Krimer, Sirup Vanilla, Robusta, dan Air berdasarkan hasil batch yang ditetapkan.
 
 ## Jika data belum muncul

@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "teco_pos": {
+      "$store": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['schemaVersion','transactions','expenses','users','settings'])"
+      }
+    },
+    "teco_pos_backups": {
+      "$store": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
