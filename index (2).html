@@ -1166,6 +1166,7 @@ body.pwa-mode .bottom-nav {
 <div class="modal-body">
 <div class="info-box"><strong>Status:</strong> <span id="syncModalStatus">Menyambungkan...</span><br>
 <span id="syncCloudStats">Lokal: 0 transaksi · Cloud: belum terbaca</span><br>
+<span id="syncStorageStats">Penyimpanan lokal: menghitung...</span><br>
 Transaksi selalu disimpan di perangkat terlebih dahulu, kemudian digabungkan ke Firebase tanpa menimpa transaksi perangkat lain.</div>
 <div class="code-box">Database: teman-coffee-pandawa
 Path aktif: teco_pos/teco-pandawa-main
@@ -1175,6 +1176,7 @@ Backup harian: teco_pos_backups/teco-pandawa-main/daily</div>
 <div class="modal-footer">
 <button class="btn-secondary" onclick="exportJsonBackup()">⬇️ Backup JSON</button>
 <button class="btn-secondary" onclick="backupCloudNow()">☁️ Backup Cloud</button>
+<button class="btn-secondary" onclick="cleanupStorageNow()">🧹 Bersihkan Penyimpanan</button>
 <button class="btn-primary" onclick="syncNow()">🔄 Sinkron Sekarang</button>
 <button class="btn-secondary" onclick="closeModal('modalSync')">Tutup</button>
 </div>

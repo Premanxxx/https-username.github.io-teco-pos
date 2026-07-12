@@ -1,3 +1,10 @@
+# v3.1.0
+
+- Memperbaiki notifikasi penyimpanan penuh akibat gambar base64 tersalin ke setiap item transaksi.
+- Memigrasikan transaksi lama ke format tanpa gambar.
+- Menambahkan pembersihan cache otomatis dan tombol Bersihkan Penyimpanan.
+- Menambahkan statistik ukuran penyimpanan lokal.
+
 # v3.0.0 — 12 Juli 2026
 
 - Menambahkan laporan WhatsApp dan Excel harian, mingguan, dan bulanan dengan satu mesin analisis.

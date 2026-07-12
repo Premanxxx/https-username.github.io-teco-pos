@@ -1,8 +1,8 @@
-/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.0.0 */
+/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.1.0 */
 (function () {
   'use strict';
 
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.0';
   const PRIMARY_KEY = 'teco_pos_data';
   const EMERGENCY_KEY = 'teco_pos_emergency_backup_v3';
   const DEVICE_KEY = 'teco_pos_device_id_v3';
@@ -66,6 +66,32 @@
     } catch (_) { return null; }
   }
 
+  function isEmbeddedData(value) {
+    return typeof value === 'string' && /^(data:image\/|blob:)/i.test(value);
+  }
+
+  function sanitizeTransactionItem(source) {
+    const item = clone(source) || {};
+    // Gambar base64 pada menu tidak boleh disalin ke setiap transaksi.
+    ['img', 'image', 'imageUrl', 'photo', 'thumbnail'].forEach((key) => {
+      if (isEmbeddedData(item[key])) delete item[key];
+    });
+    return item;
+  }
+
+  function sanitizeTransaction(source) {
+    const tx = clone(source) || {};
+    tx.items = asList(tx.items).map(sanitizeTransactionItem);
+    ['img', 'image', 'photo', 'thumbnail'].forEach((key) => {
+      if (isEmbeddedData(tx[key])) delete tx[key];
+    });
+    return tx;
+  }
+
+  function sanitizeTransactions(rows) {
+    return asList(rows).map(sanitizeTransaction);
+  }
+
   function transactionFingerprint(tx) {
     const items = asList(tx && tx.items).map((item) => [
       String(item.name || item.nama || '').trim().toLowerCase(),
@@ -83,7 +109,7 @@
   function ensureRecordIds(rows, prefix, kind) {
     const used = new Set();
     return asList(rows).map((source, index) => {
-      const row = clone(source) || {};
+      const row = kind === 'transaction' ? sanitizeTransaction(source) : (clone(source) || {});
       let id = String(row.id || '').replace(/[.#$\[\]\/]/g, '-');
       if (!id) {
         const basis = kind === 'transaction'
@@ -210,7 +236,7 @@
     return {
       ...extra,
       schemaVersion: 3,
-      transactions: ensureRecordIds(state.transactions || [], 'TX', 'transaction'),
+      transactions: ensureRecordIds(sanitizeTransactions(state.transactions || []), 'TX', 'transaction'),
       expenses: ensureRecordIds(state.expenses || [], 'EXP', 'expense'),
       stockNotes: ensureRecordIds(state.stockNotes || [], 'STK', 'stock'),
       menu: sanitizeMenu(state.menu || []),
@@ -284,7 +310,7 @@
     try {
       const compact = {
         schemaVersion: 3,
-        transactions: asList(payload.transactions).slice(0, 150),
+        transactions: sanitizeTransactions(payload.transactions).slice(0, 150),
         expenses: asList(payload.expenses).slice(0, 100),
         stockNotes: asList(payload.stockNotes).slice(0, 50),
         users: payload.users,
@@ -299,22 +325,62 @@
     } catch (_) {}
   }
 
+  function cleanupAuxiliaryStorage() {
+    const removableExact = new Set([
+      EMERGENCY_KEY,
+      'teco_analytics_adjustments_v2',
+      'teco_analytics_cache',
+      'teco_report_cache',
+      'teco_pos_backup',
+      'teco_pos_data_backup'
+    ]);
+    const removablePatterns = [
+      /^teco_.*(?:backup|cache|snapshot|legacy)/i,
+      /^firebase:previous_websocket_failure/i
+    ];
+    const removed = [];
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key || key === PRIMARY_KEY || key === DEVICE_KEY) continue;
+      if (removableExact.has(key) || removablePatterns.some((pattern) => pattern.test(key))) {
+        try { localStorage.removeItem(key); removed.push(key); } catch (_) {}
+      }
+    }
+    return removed;
+  }
+
   function persistLocal(payload) {
     const clean = mergePayloads(payload, {});
+    clean.transactions = sanitizeTransactions(clean.transactions);
     clean.updatedAt = payload.updatedAt || nowIso();
     clean.updatedBy = payload.updatedBy || 'system';
     clean.deviceId = payload.deviceId || getDeviceId();
-    try {
-      const text = JSON.stringify(clean);
+    const text = JSON.stringify(clean);
+
+    const commit = () => {
       localStorage.setItem(PRIMARY_KEY, text);
       writeEmergencyBackup(clean);
       saveIndexedBackup(clean);
       window.__TECO_NATIVE_DATA__ = clean;
       return clean;
-    } catch (error) {
-      console.error('[Te.Co v3] Penyimpanan lokal gagal:', error);
-      if (typeof showToast === 'function') showToast('Penyimpanan penuh/gagal. Transaksi belum disimpan.');
-      return null;
+    };
+
+    try {
+      return commit();
+    } catch (firstError) {
+      console.warn('[Te.Co v3.1] Kuota lokal terdeteksi; membersihkan cache lama dan mencoba kembali.', firstError);
+      cleanupAuxiliaryStorage();
+      try {
+        const saved = commit();
+        if (typeof showToast === 'function') showToast('Penyimpanan berhasil dibersihkan dan data tetap tersimpan.');
+        return saved;
+      } catch (error) {
+        console.error('[Te.Co v3.1] Penyimpanan lokal gagal:', error);
+        // Simpan salinan besar di IndexedDB walaupun localStorage sudah penuh.
+        saveIndexedBackup(clean);
+        if (typeof showToast === 'function') showToast('Penyimpanan browser penuh. Sinkronkan/backup lalu bersihkan data situs.');
+        return null;
+      }
     }
   }
 
@@ -557,7 +623,7 @@
       createdAt: nowIso(),
       updatedAt: nowIso(),
       deviceId: getDeviceId(),
-      items: clone(state.cart),
+      items: asList(state.cart).map(sanitizeTransactionItem),
       subtotal,
       tax,
       service,
@@ -700,6 +766,28 @@
     downloadCsv(buildCsvReport(txs, expenses, 'LAPORAN BULANAN TRANSAKSI'), 'Laporan_Bulanan_TeCo_' + month + '.csv');
   }
 
+  async function cleanupStorageNow() {
+    if (!ensureAdmin()) return;
+    const beforeText = localStorage.getItem(PRIMARY_KEY) || '';
+    const beforeBytes = beforeText.length * 2;
+    const current = readPrimary() || buildDataPayloadV3();
+    const removed = cleanupAuxiliaryStorage();
+    const saved = persistLocal(current);
+    if (!saved) {
+      showToast('Pembersihan belum cukup. Pastikan cloud tersinkron lalu hapus data situs browser.');
+      return false;
+    }
+    applyDataPayloadV3(saved, true);
+    const afterBytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;
+    const freedKb = Math.max(0, Math.round((beforeBytes - afterBytes) / 1024));
+    const info = document.getElementById('syncStorageStats');
+    if (info) info.textContent = `Penyimpanan lokal: ${Math.round(afterBytes / 1024)} KB`;
+    showToast(`Penyimpanan dibersihkan${freedKb ? ` · hemat ${freedKb} KB` : ''}.`);
+    scheduleCloudPush(100);
+    console.info('[Te.Co v3.1] Storage cleanup', { removed, beforeBytes, afterBytes });
+    return true;
+  }
+
   async function syncNow() {
     if (!ensureAdmin()) return;
     if (!syncController || !syncController.enabled) await initSyncV3();
@@ -739,7 +827,12 @@
     const month = document.getElementById('exportMonth');
     if (month && !month.value) month.value = new Date().toISOString().slice(0, 7);
     const version = document.querySelector('.version-tag');
-    if (version) version.textContent = 'v3.0.0 · Cloud-safe';
+    if (version) version.textContent = 'v3.1.0 · Cloud-safe · Storage-safe';
+    const storageInfo = document.getElementById('syncStorageStats');
+    if (storageInfo) {
+      const bytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;
+      storageInfo.textContent = `Penyimpanan lokal: ${Math.round(bytes / 1024)} KB`;
+    }
   }
 
   // Replace global operations used by the existing UI.
@@ -758,14 +851,32 @@
   window.sendReportToWhatsApp = sendReportToWhatsAppV3;
   window.exportExcelMonthly = exportExcelMonthlyV3;
   window.syncNow = syncNow;
+  window.cleanupStorageNow = cleanupStorageNow;
   window.backupCloudNow = backupCloudNow;
   window.exportJsonBackup = exportJsonBackup;
   window.TecoReliability = {
     version: VERSION,
     sync: syncNow,
+    cleanupStorage: cleanupStorageNow,
     backupCloud: backupCloudNow,
     exportBackup: exportJsonBackup,
     mergePayloads,
+    cleanupStorage: () => {
+      const removed = cleanupAuxiliaryStorage();
+      const current = readPrimary();
+      if (current) persistLocal(current);
+      return removed;
+    },
+    storageStatus: async () => {
+      const estimate = navigator.storage && navigator.storage.estimate
+        ? await navigator.storage.estimate()
+        : {};
+      return {
+        primaryBytes: (localStorage.getItem(PRIMARY_KEY) || '').length * 2,
+        usage: estimate.usage || null,
+        quota: estimate.quota || null
+      };
+    },
     status: () => ({
       deviceId: getDeviceId(),
       localTransactions: asList(readPrimary()?.transactions).length,
