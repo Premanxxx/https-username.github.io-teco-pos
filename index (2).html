@@ -334,6 +334,28 @@ body.pwa-mode .bottom-nav {
 .expense-meta{font-size:11px;color:var(--gray);margin-top:2px;line-height:1.4}
 .expense-amount{font-size:14px;font-weight:800;color:#C62828;text-align:right;white-space:nowrap}
 .small-help{font-size:11px;color:var(--gray);line-height:1.45;margin-top:4px}
+
+.hpp-toolbar{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin:12px 0}
+.hpp-toolbar .cash-input-group{margin-bottom:0}
+.hpp-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}
+.hpp-summary-card{background:#F8F9FA;border:1px solid var(--light-gray);border-radius:12px;padding:12px}
+.hpp-summary-card span{display:block;font-size:11px;color:var(--gray);margin-bottom:4px}
+.hpp-summary-card strong{font-size:18px;color:var(--dark)}
+.hpp-table-wrap{width:100%;overflow-x:auto;border:1px solid var(--light-gray);border-radius:12px;background:white;margin-top:10px}
+.hpp-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}
+.hpp-table th,.hpp-table td{padding:8px;border-bottom:1px solid var(--light-gray);text-align:left;vertical-align:middle}
+.hpp-table th{background:#F5F7FA;color:var(--gray);font-weight:800;font-size:11px;text-transform:uppercase}
+.hpp-table input,.hpp-table select{width:100%;padding:9px 10px;border:1px solid var(--light-gray);border-radius:8px;font-size:13px;outline:none;background:white}
+.hpp-table input[type=number]{text-align:right}
+.hpp-total-cell{text-align:right;font-weight:800;white-space:nowrap}
+.hpp-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hpp-saved-item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--light-gray)}
+.hpp-saved-title{font-weight:800;font-size:13px}
+.hpp-saved-meta{font-size:11px;color:var(--gray);margin-top:3px}
+.hpp-mini-btn{padding:6px 10px;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;background:var(--primary);color:white}
+.hpp-mini-btn.secondary{background:#E9ECEF;color:var(--dark)}
+.hpp-mini-btn.danger{background:#C62828;color:white}
+@media(max-width:760px){.hpp-toolbar,.hpp-summary-grid{grid-template-columns:1fr}.hpp-summary-card strong{font-size:16px}}
 .code-box{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#212121;color:white;border-radius:12px;padding:12px;font-size:11px;line-height:1.5;white-space:pre-wrap;overflow:auto;max-height:240px}
 @media(max-width:600px){.sync-pill{display:none}.modal-footer{flex-wrap:wrap}}
 
@@ -528,6 +550,11 @@ body.pwa-mode .bottom-nav {
 <div class="admin-icon">🧾</div>
 <div class="admin-title">Stok Hampir Habis</div>
 <div class="admin-desc">Catatan bahan perlu restock</div>
+</div>
+<div class="admin-card" onclick="openHppModal()">
+<div class="admin-icon">&#128200;</div>
+<div class="admin-title">Analisa HPP Produk</div>
+<div class="admin-desc">Harga bahan, pemakaian, dan margin per varian</div>
 </div>
 <div class="admin-card" onclick="openDeleteCashierModal()">
 <div class="admin-icon">🧹</div>
@@ -1094,12 +1121,95 @@ body.pwa-mode .bottom-nav {
 <button class="btn-primary" id="expenseSaveBtn" style="width:100%" onclick="addDailyExpense()">+ Simpan Pengeluaran</button>
 <button class="btn-secondary" id="expenseCancelEditBtn" style="width:100%;margin-top:8px;display:none" onclick="resetExpenseForm()">Batal Edit</button>
 <div style="margin-top:18px;border-top:2px solid var(--light-gray);padding-top:12px">
-<h3 style="font-size:14px;margin-bottom:8px">Riwayat Pengeluaran Terbaru</h3>
+<h3 style="font-size:14px;margin-bottom:8px">Riwayat Pengeluaran</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
+<div class="cash-input-group" style="margin-bottom:0">
+<label>Lihat tanggal</label>
+<input type="date" id="expenseFilterDate" onchange="renderExpenseList()">
+</div>
+<div class="cash-input-group" style="margin-bottom:0">
+<label>Kasir</label>
+<select id="expenseFilterUser" onchange="renderExpenseList()" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="">Semua Kasir</option>
+<option value="kasir1">Kasir 1</option>
+<option value="kasir2">Kasir 2</option>
+<option value="kasir3">Kasir 3</option>
+</select>
+</div>
+<button type="button" class="btn-secondary" style="padding:12px 14px" onclick="resetExpenseFilterDate()">Hari Ini</button>
+</div>
+<div id="expenseListSummary" class="small-help" style="margin-bottom:8px"></div>
 <div id="expenseList"></div>
 </div>
 </div>
 <div class="modal-footer">
 <button class="btn-secondary" onclick="closeModal('modalExpense')">Tutup</button>
+</div>
+</div>
+</div>
+
+
+<!-- Admin: HPP Product Modal -->
+<div class="modal-overlay" id="modalHpp">
+<div class="modal" style="max-width:980px">
+<div class="modal-header">
+<h2>Analisa HPP Produk</h2>
+<button class="modal-close" onclick="closeModal('modalHpp')">x</button>
+</div>
+<div class="modal-body">
+<div class="info-box">Fitur ini khusus admin untuk menghitung HPP per cup berdasarkan pemakaian bahan dan harga per satuan. Item tetap seperti es batu, plastik cup, dan sedotan dapat dihitung untuk setiap cup terjual, lalu ditambah bahan lain sesuai varian produk.</div>
+<div class="hpp-toolbar">
+<div class="cash-input-group">
+<label>Produk</label>
+<select id="hppProductSelect" onchange="renderHppEditor()" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none"></select>
+</div>
+<div class="cash-input-group">
+<label>Varian</label>
+<select id="hppVariantSelect" onchange="renderHppEditor()" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="Dingin">Dingin</option>
+<option value="Hangat">Hangat</option>
+<option value="Tanpa varian">Tanpa varian</option>
+</select>
+</div>
+<div class="cash-input-group">
+<label>Dari tanggal</label>
+<input type="date" id="hppStartDate" onchange="updateHppSummary()">
+</div>
+<div class="cash-input-group">
+<label>Sampai tanggal</label>
+<input type="date" id="hppEndDate" onchange="updateHppSummary()">
+</div>
+</div>
+<div id="hppSummaryCards" class="hpp-summary-grid"></div>
+<div class="hpp-table-wrap">
+<table class="hpp-table">
+<thead>
+<tr>
+<th style="width:28%">Bahan</th>
+<th style="width:13%">Pemakaian / Cup</th>
+<th style="width:11%">Satuan</th>
+<th style="width:15%">Harga / Satuan</th>
+<th style="width:13%">Total Pakai</th>
+<th style="width:13%">Biaya / Cup</th>
+<th style="width:7%">Aksi</th>
+</tr>
+</thead>
+<tbody id="hppRowsBody"></tbody>
+</table>
+</div>
+<div class="hpp-actions">
+<button type="button" class="btn-secondary" onclick="addHppMaterialRow()">+ Tambah Bahan</button>
+<button type="button" class="btn-secondary" onclick="resetHppDefaultRows()">Gunakan Default</button>
+<button type="button" class="btn-primary" onclick="saveHppRecipe()">Simpan HPP Varian</button>
+</div>
+<div style="margin-top:18px;border-top:2px solid var(--light-gray);padding-top:12px">
+<h3 style="font-size:14px;margin-bottom:8px">Daftar HPP Tersimpan</h3>
+<div id="hppSavedList"></div>
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn-secondary" onclick="exportHppCsv()">Export CSV</button>
+<button class="btn-secondary" onclick="closeModal('modalHpp')">Tutup</button>
 </div>
 </div>
 </div>
@@ -1283,6 +1393,13 @@ const DEFAULT_USERS = {
     admin:{name:'Admin',pin:'0000',role:'admin'}
 };
 
+const DEFAULT_HPP_FIXED_ITEMS = [
+    {name:'Es Batu', usage:150, unit:'gr', price:0},
+    {name:'Plastik Cup', usage:1, unit:'pcs', price:0},
+    {name:'Sedotan', usage:1, unit:'pcs', price:0}
+];
+
+
 // ==================== MULTI DEVICE SYNC CONFIG ====================
 // Isi konfigurasi ini dari Firebase Console agar data tersinkron di semua device.
 // Jika belum diisi, aplikasi tetap berjalan memakai localStorage di masing-masing device.
@@ -1307,6 +1424,7 @@ let state = {
     transactions: [],
     expenses: [],
     stockNotes: [],
+    hppData: {recipes:{}},
     menu: [],
     users: {},
     settings: {
@@ -1324,6 +1442,7 @@ let state = {
     },
     selectedProduct: null,
     selectedVariant: null,
+    selectedQty: 1,
     selectedPayment: 'cash',
     currentReceipt: null
 };
@@ -1337,6 +1456,7 @@ function init() {
     state.users = {...JSON.parse(JSON.stringify(DEFAULT_USERS)), ...state.users};
     state.expenses = state.expenses || [];
     state.stockNotes = state.stockNotes || [];
+    ensureHppData();
     ensureMenuImages();
     initSync();
     renderMenu('all');
@@ -1395,6 +1515,7 @@ function buildDataPayload() {
         transactions: state.transactions || [],
         expenses: state.expenses || [],
         stockNotes: state.stockNotes || [],
+        hppData: state.hppData || {recipes:{}},
         menu: state.menu || [],
         users: state.users || {},
         settings: state.settings || {},
@@ -1408,6 +1529,8 @@ function applyDataPayload(data, refreshUI = true) {
     state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
     state.expenses = Array.isArray(data.expenses) ? data.expenses : [];
     state.stockNotes = Array.isArray(data.stockNotes) ? data.stockNotes : [];
+    state.hppData = data.hppData && typeof data.hppData === 'object' ? data.hppData : {recipes:{}};
+    ensureHppData();
     state.menu = Array.isArray(data.menu) ? data.menu : [];
     state.users = data.users && typeof data.users === 'object' ? data.users : {};
     state.settings = {...state.settings, ...(data.settings || {})};
@@ -1496,15 +1619,157 @@ function refreshAfterDataUpdate() {
     if(document.getElementById('modalExpense')?.classList.contains('active')) renderExpenseList();
     if(document.getElementById('modalDeleteCashier')?.classList.contains('active')) previewDeleteCashierData();
     if(document.getElementById('modalStock')?.classList.contains('active')) renderStockList();
+    if(document.getElementById('modalHpp')?.classList.contains('active')) { renderHppSavedList(); updateHppSummary(); }
 }
 
 function setDefaultDateInputs() {
     const today = new Date().toISOString().split('T')[0];
     const month = today.slice(0, 7);
-    ['expenseDate','deleteDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
-    const monthEl = document.getElementById('deleteMonth');
-    if(monthEl) monthEl.value = month;
+    ['expenseDate','expenseFilterDate','deleteDate'].forEach(id => { const el = document.getElementById(id); if(el) el.value = today; });
+    ['deleteMonth','exportMonth'].forEach(id => { const el = document.getElementById(id); if(el) el.value = month; });
 }
+
+
+function isAdminUser() {
+    return state.currentUser && state.currentUser.role === 'admin';
+}
+
+function normalizeCashierKey(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if(!raw) return '';
+    const cleaned = raw.replace(/[^a-z0-9]/g, '');
+    if(cleaned === 'admin') return 'admin';
+    const numbered = cleaned.match(/(?:kasir|cashier)(\d+)/);
+    if(numbered) return 'kasir' + numbered[1];
+    return cleaned;
+}
+
+function transactionCashierKey(tx) {
+    return normalizeCashierKey(tx?.cashier || tx?.cashierId || tx?.userId || tx?.kasir || tx?.cashierName || tx?.user || '');
+}
+
+function expenseCashierKey(expense) {
+    return normalizeCashierKey(expense?.cashier || expense?.cashierId || expense?.userId || expense?.kasir || expense?.cashierName || expense?.user || '');
+}
+
+function currentCashierKey() {
+    if(!state.currentUser) return '';
+    return normalizeCashierKey(state.currentUser.id || state.currentUser.name);
+}
+
+function canCurrentUserAccessTransaction(tx) {
+    if(!state.currentUser) return false;
+    if(isAdminUser()) return true;
+    const current = currentCashierKey();
+    return transactionCashierKey(tx) === current || normalizeCashierKey(tx?.cashierName) === current;
+}
+
+function canCurrentUserAccessExpense(expense) {
+    if(!state.currentUser) return false;
+    if(isAdminUser()) return true;
+    const current = currentCashierKey();
+    return expenseCashierKey(expense) === current || normalizeCashierKey(expense?.cashierName) === current;
+}
+
+function dateKeyFromIso(value) {
+    return String(value || '').slice(0, 10);
+}
+
+function getVisibleTransactions(options = {}) {
+    const {date = '', month = '', cashier = ''} = options;
+    let txs = [...(state.transactions || [])];
+    if(!isAdminUser()) txs = txs.filter(canCurrentUserAccessTransaction);
+    const cashierKey = normalizeCashierKey(cashier);
+    if(isAdminUser() && cashierKey) txs = txs.filter(t => transactionCashierKey(t) === cashierKey || normalizeCashierKey(t?.cashierName) === cashierKey);
+    if(date) txs = txs.filter(t => dateKeyFromIso(t.date).startsWith(date));
+    if(month) txs = txs.filter(t => dateKeyFromIso(t.date).startsWith(month));
+    return txs;
+}
+
+function getVisibleExpenses(options = {}) {
+    const {date = '', month = '', cashier = ''} = options;
+    let expenses = [...(state.expenses || [])];
+    if(!isAdminUser()) expenses = expenses.filter(canCurrentUserAccessExpense);
+    const cashierKey = normalizeCashierKey(cashier);
+    if(isAdminUser() && cashierKey) expenses = expenses.filter(e => expenseCashierKey(e) === cashierKey || normalizeCashierKey(e?.cashierName) === cashierKey);
+    if(date) expenses = expenses.filter(e => dateKeyFromIso(e.date) === date);
+    if(month) expenses = expenses.filter(e => dateKeyFromIso(e.date).startsWith(month));
+    return expenses;
+}
+
+function setupTransactionAccess() {
+    const userFilter = document.getElementById('filterUser');
+    if(!userFilter || !state.currentUser) return;
+    if(isAdminUser()) {
+        userFilter.disabled = false;
+        const allOption = userFilter.querySelector('option[value=""]');
+        if(allOption) allOption.textContent = 'Semua Kasir';
+    } else {
+        userFilter.value = state.currentUser.id;
+        userFilter.disabled = true;
+        userFilter.title = 'Kasir hanya dapat melihat transaksinya sendiri';
+    }
+}
+
+function setupExpenseAccess() {
+    const userFilter = document.getElementById('expenseFilterUser');
+    if(!userFilter || !state.currentUser) return;
+    if(isAdminUser()) {
+        userFilter.disabled = false;
+        const allOption = userFilter.querySelector('option[value=""]');
+        if(allOption) allOption.textContent = 'Semua Kasir';
+    } else {
+        userFilter.value = state.currentUser.id;
+        userFilter.disabled = true;
+        userFilter.title = 'Kasir hanya dapat melihat pengeluarannya sendiri';
+    }
+}
+
+function resetExpenseFilterDate() {
+    const filter = document.getElementById('expenseFilterDate');
+    if(filter) filter.value = new Date().toISOString().split('T')[0];
+    renderExpenseList();
+}
+
+function itemVariantName(item) {
+    return item?.variant ? String(item.variant) : 'Tanpa varian';
+}
+
+function buildVariantOrderSummary(txs) {
+    const summary = {};
+    (txs || []).forEach(tx => {
+        (tx.items || []).forEach(item => {
+            const name = String(item?.name || 'Item');
+            const variant = itemVariantName(item);
+            const key = name + '||' + variant;
+            if(!summary[key]) summary[key] = {name, variant, qty: 0, revenue: 0};
+            const qty = parseInt(item?.qty) || 1;
+            summary[key].qty += qty;
+            summary[key].revenue += (parseInt(item?.price) || 0) * qty;
+        });
+    });
+    return Object.values(summary).sort((a,b) => b.qty - a.qty || b.revenue - a.revenue || a.name.localeCompare(b.name));
+}
+
+function summarizeTransactionVariants(tx, limit = 2) {
+    const summary = buildVariantOrderSummary([tx]);
+    if(!summary.length) return 'Tidak ada item';
+    const shown = summary.slice(0, limit).map(row => `${row.name} (${row.variant}) x${row.qty}`);
+    const remaining = summary.length - shown.length;
+    return shown.join('; ') + (remaining > 0 ? ` +${remaining} varian lain` : '');
+}
+
+function getCurrentWeekRange() {
+    const now = new Date();
+    const day = now.getDay() || 7;
+    const start = new Date(now);
+    start.setDate(now.getDate() - day + 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    const toKey = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return {start: toKey(start), end: toKey(end)};
+}
+
 
 // ==================== LOGIN ====================
 function doLogin() {
@@ -1529,6 +1794,8 @@ function doLogin() {
             document.getElementById('navAdmin').style.display = 'flex';
             document.getElementById('sideMenuAdmin').style.display = 'flex';
         }
+        setupTransactionAccess();
+        setupExpenseAccess();
 
         playSound('login');
         showToast('Selamat datang, ' + state.currentUser.name + '!');
@@ -1642,9 +1909,19 @@ function openProductDetail(itemId) {
                     ${variants.map((v,i) => `<button class="variant-btn ${i===0?'active':''}" onclick="selectVariant(this,'${v}')">${v}</button>`).join('')}
                 </div>
             </div>
+            <div class="variant-options">
+                <label>Jumlah pesanan untuk varian terpilih</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <button type="button" class="qty-btn" onclick="updateSelectedQty(-1)">-</button>
+                    <input type="number" id="selectedQty" min="1" value="1" oninput="setSelectedQty(this.value)" style="width:72px;text-align:center;padding:8px;border:2px solid var(--light-gray);border-radius:10px;font-weight:700">
+                    <button type="button" class="qty-btn" onclick="updateSelectedQty(1)">+</button>
+                </div>
+                <div class="small-help">Jumlah ini akan ditambahkan ke varian yang sedang dipilih.</div>
+            </div>
         </div>
     `;
     state.selectedVariant = variants[0];
+    state.selectedQty = 1;
     openModal('productModal');
 }
 
@@ -1654,23 +1931,37 @@ function selectVariant(btn, variant) {
     state.selectedVariant = variant;
 }
 
+function setSelectedQty(value) {
+    const qty = Math.max(1, parseInt(value) || 1);
+    state.selectedQty = qty;
+    const el = document.getElementById('selectedQty');
+    if(el) el.value = qty;
+}
+
+function updateSelectedQty(delta) {
+    setSelectedQty((state.selectedQty || 1) + delta);
+}
+
 function addToCartFromModal() {
     if(!state.selectedProduct) return;
-    addToCart(state.selectedProduct, state.selectedVariant);
+    const qty = Math.max(1, parseInt(document.getElementById('selectedQty')?.value) || state.selectedQty || 1);
+    addToCart(state.selectedProduct, state.selectedVariant, qty);
     closeModal('productModal');
 }
 
 // ==================== CART ====================
-function addToCart(item, variant) {
-    const existing = state.cart.find(c => c.id === item.id && c.variant === variant);
+function addToCart(item, variant, qty = 1) {
+    const selectedVariant = variant || 'Dingin';
+    const addQty = Math.max(1, parseInt(qty) || 1);
+    const existing = state.cart.find(c => c.id === item.id && c.variant === selectedVariant);
     if(existing) {
-        existing.qty++;
+        existing.qty += addQty;
     } else {
-        state.cart.push({...item, qty: 1, variant: variant || 'Dingin'});
+        state.cart.push({...item, qty: addQty, variant: selectedVariant});
     }
     renderCart();
     playSound('add');
-    showToast(item.name + ' ditambahkan!');
+    showToast(`${item.name} (${selectedVariant}) x${addQty} ditambahkan!`);
 }
 
 function renderCart() {
@@ -1900,16 +2191,11 @@ function printReceipt() {
 
 // ==================== TRANSACTIONS ====================
 function loadTransactions() {
+    setupTransactionAccess();
     const filterDate = document.getElementById('filterDate').value;
-    const filterUser = document.getElementById('filterUser').value;
+    const filterUser = isAdminUser() ? (document.getElementById('filterUser').value || '') : state.currentUser?.id;
 
-    let txs = state.transactions;
-    if(filterDate) {
-        txs = txs.filter(t => t.date.startsWith(filterDate));
-    }
-    if(filterUser) {
-        txs = txs.filter(t => t.cashier === filterUser);
-    }
+    let txs = getVisibleTransactions({date: filterDate, cashier: filterUser});
 
     const list = document.getElementById('transactionList');
     if(txs.length === 0) {
@@ -1924,12 +2210,15 @@ function loadTransactions() {
     list.innerHTML = txs.map(tx => {
         const date = new Date(tx.date);
         const payIcon = {cash:'💵',qris:'📱',transfer:'🏦'}[tx.payment] || '💳';
+        const totalQty = (tx.items || []).reduce((s,i) => s + (parseInt(i.qty) || 1), 0);
+        const variantSummary = summarizeTransactionVariants(tx);
         return `
             <div class="transaction-item" onclick="viewReceipt('${tx.id}')">
                 <div class="tx-icon">${payIcon}</div>
                 <div class="tx-info">
                     <div class="tx-id">${tx.id}</div>
-                    <div class="tx-meta">${date.toLocaleString('id-ID')} · ${tx.cashierName} · ${tx.items.length} item</div>
+                    <div class="tx-meta">${date.toLocaleString('id-ID')} · ${tx.cashierName || '-'} · ${totalQty} pesanan</div>
+                    <div class="tx-meta">${variantSummary}</div>
                 </div>
                 <div>
                     <div class="tx-amount">Rp ${formatNumber(tx.total)}</div>
@@ -1941,22 +2230,25 @@ function loadTransactions() {
 }
 
 function viewReceipt(txId) {
-    const tx = state.transactions.find(t => t.id === txId);
+    const tx = (state.transactions || []).find(t => t.id === txId && canCurrentUserAccessTransaction(t));
     if(tx) {
         state.currentReceipt = tx;
         renderReceipt(tx);
         openModal('receiptModal');
+    } else {
+        showToast('Transaksi tidak ditemukan atau tidak dapat diakses');
     }
 }
 
 function updateStats() {
     const today = new Date().toISOString().split('T')[0];
     const thisMonth = today.slice(0, 7);
+    const filterUser = isAdminUser() ? (document.getElementById('filterUser')?.value || '') : state.currentUser?.id;
 
-    const todayTxs = state.transactions.filter(t => t.date.startsWith(today));
-    const monthTxs = state.transactions.filter(t => t.date.startsWith(thisMonth));
-    const todayExpenses = state.expenses.filter(e => e.date === today);
-    const monthExpenses = state.expenses.filter(e => e.date && e.date.startsWith(thisMonth));
+    const todayTxs = getVisibleTransactions({date: today, cashier: filterUser});
+    const monthTxs = getVisibleTransactions({month: thisMonth, cashier: filterUser});
+    const todayExpenses = getVisibleExpenses({date: today, cashier: filterUser});
+    const monthExpenses = getVisibleExpenses({month: thisMonth, cashier: filterUser});
 
     const todayRevenue = todayTxs.reduce((s,t) => s + (t.total || 0), 0);
     const monthRevenue = monthTxs.reduce((s,t) => s + (t.total || 0), 0);
@@ -1987,8 +2279,13 @@ function buildCsvReport(txs, expenses, title) {
     let csv = title + '\n';
     csv += 'No,ID Transaksi,Tanggal,Kasir,Item,Subtotal,PPN,Service,Total,Metode,Status\n';
     txs.forEach((tx, i) => {
-        const items = (tx.items || []).map(it => it.name + ' x' + it.qty).join('; ');
+        const items = (tx.items || []).map(it => `${it.name}${it.variant ? ' (' + it.variant + ')' : ''} x${it.qty || 1}`).join('; ');
         csv += [i+1,tx.id,tx.date,tx.cashierName,escapeCsv(items),tx.subtotal,tx.tax,tx.service||0,tx.total,tx.payment,tx.status].join(',') + '\n';
+    });
+    csv += '\nREKAP PESANAN PER VARIAN\n';
+    csv += 'No,Menu,Varian,Jumlah Pesanan,Omzet\n';
+    buildVariantOrderSummary(txs).forEach((row, i) => {
+        csv += [i+1,escapeCsv(row.name),escapeCsv(row.variant),row.qty,row.revenue].join(',') + '\n';
     });
     csv += '\nLAPORAN PENGELUARAN\n';
     csv += 'No,Tanggal,Kategori,Catatan,Nominal,Dibuat Oleh\n';
@@ -2014,12 +2311,9 @@ function downloadCsv(csv, filename) {
 
 function exportExcel() {
     const filterDate = document.getElementById('filterDate').value;
-    let txs = state.transactions;
-    let expenses = state.expenses;
-    if(filterDate) {
-        txs = txs.filter(t => t.date.startsWith(filterDate));
-        expenses = expenses.filter(e => e.date === filterDate);
-    }
+    const filterUser = isAdminUser() ? (document.getElementById('filterUser')?.value || '') : state.currentUser?.id;
+    const txs = getVisibleTransactions({date: filterDate, cashier: filterUser});
+    const expenses = getVisibleExpenses({date: filterDate, cashier: filterUser});
     if(txs.length === 0 && expenses.length === 0) { showToast('Tidak ada data untuk diexport'); return; }
     const csv = buildCsvReport(txs, expenses, 'LAPORAN TRANSAKSI');
     downloadCsv(csv, 'Laporan_TeCo_' + (filterDate || new Date().toISOString().split('T')[0]) + '.csv');
@@ -2027,12 +2321,13 @@ function exportExcel() {
 }
 
 function exportExcelMonthly() {
-    const thisMonth = new Date().toISOString().slice(0, 7);
-    const txs = state.transactions.filter(t => t.date.startsWith(thisMonth));
-    const expenses = state.expenses.filter(e => e.date && e.date.startsWith(thisMonth));
+    const selectedMonth = document.getElementById('exportMonth')?.value || new Date().toISOString().slice(0, 7);
+    const filterUser = isAdminUser() ? (document.getElementById('filterUser')?.value || '') : state.currentUser?.id;
+    const txs = getVisibleTransactions({month: selectedMonth, cashier: filterUser});
+    const expenses = getVisibleExpenses({month: selectedMonth, cashier: filterUser});
     if(txs.length === 0 && expenses.length === 0) { showToast('Tidak ada data bulan ini'); return; }
     const csv = buildCsvReport(txs, expenses, 'LAPORAN BULANAN TRANSAKSI');
-    downloadCsv(csv, 'Laporan_Bulanan_TeCo_' + thisMonth + '.csv');
+    downloadCsv(csv, 'Laporan_Bulanan_TeCo_' + selectedMonth + '.csv');
     showToast('Laporan bulanan berhasil diexport!');
 }
 
@@ -2047,12 +2342,27 @@ function getReportDataset(type) {
     const today = new Date().toISOString().split('T')[0];
     const month = today.slice(0, 7);
     const filterDate = document.getElementById('filterDate')?.value || today;
-    let key = today, label = 'Hari ini';
-    if(type === 'filtered') { key = filterDate; label = 'Tanggal ' + filterDate; }
-    else if(type === 'monthly') { key = month; label = 'Bulan ' + month; }
-    else if(type === 'daily') { key = today; label = 'Hari ini'; }
-    const txs = state.transactions.filter(t => t.date.startsWith(key));
-    const expenses = state.expenses.filter(e => type === 'monthly' ? (e.date && e.date.startsWith(key)) : e.date === key);
+    const filterUser = isAdminUser() ? (document.getElementById('filterUser')?.value || '') : state.currentUser?.id;
+    let key = today, label = 'Hari ini', txs = [], expenses = [];
+    if(type === 'filtered') {
+        key = filterDate; label = 'Tanggal ' + filterDate;
+        txs = getVisibleTransactions({date: key, cashier: filterUser});
+        expenses = getVisibleExpenses({date: key, cashier: filterUser});
+    } else if(type === 'monthly') {
+        key = document.getElementById('exportMonth')?.value || month; label = 'Bulan ' + key;
+        txs = getVisibleTransactions({month: key, cashier: filterUser});
+        expenses = getVisibleExpenses({month: key, cashier: filterUser});
+    } else if(type === 'weekly') {
+        const range = getCurrentWeekRange();
+        key = range.start + ' s.d. ' + range.end;
+        label = 'Minggu ' + key;
+        txs = getVisibleTransactions({cashier: filterUser}).filter(t => { const d = dateKeyFromIso(t.date); return d >= range.start && d <= range.end; });
+        expenses = getVisibleExpenses({cashier: filterUser}).filter(e => { const d = dateKeyFromIso(e.date); return d >= range.start && d <= range.end; });
+    } else {
+        key = today; label = 'Hari ini';
+        txs = getVisibleTransactions({date: key, cashier: filterUser});
+        expenses = getVisibleExpenses({date: key, cashier: filterUser});
+    }
     return {txs, expenses, key, label};
 }
 
@@ -2072,12 +2382,7 @@ function buildWhatsappReport(type = 'filtered') {
     const pengeluaran = expenses.reduce((s,e)=>s+(e.amount||0),0);
     const net = omzet - pengeluaran;
     const byPayment = txs.reduce((acc,t)=>{ acc[t.payment]=(acc[t.payment]||0)+(t.total||0); return acc; },{});
-    const products = {};
-    txs.forEach(t => (t.items || []).forEach(i => {
-        if(!products[i.name]) products[i.name] = 0;
-        products[i.name] += i.qty || 0;
-    }));
-    const topProducts = Object.entries(products).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const variantOrders = buildVariantOrderSummary(txs).slice(0,10);
     const activeStock = (state.stockNotes || []).filter(s => !s.resolvedAt).slice(0,5);
     let text = `LAPORAN POS ${store}\n${label}\nDibuat: ${new Date().toLocaleString('id-ID')}\n\n`;
     text += `Total transaksi: ${txs.length}\n`;
@@ -2086,8 +2391,8 @@ function buildWhatsappReport(type = 'filtered') {
     text += `Saldo bersih: Rp ${formatNumber(net)}\n\n`;
     text += `Metode bayar:\n`;
     ['cash','qris','transfer'].forEach(k => { text += `- ${k.toUpperCase()}: Rp ${formatNumber(byPayment[k] || 0)}\n`; });
-    text += `\nProduk terlaris:\n`;
-    text += topProducts.length ? topProducts.map((p,i)=>`${i+1}. ${p[0]}: ${p[1]} cup`).join('\n') + '\n' : '- Belum ada data produk\n';
+    text += `\nJumlah pesanan per varian:\n`;
+    text += variantOrders.length ? variantOrders.map((p,i)=>`${i+1}. ${p.name} (${p.variant}): ${p.qty} cup`).join('\n') + '\n' : '- Belum ada data pesanan\n';
     text += `\nPengeluaran terbaru:\n`;
     text += expenses.slice(0,5).map((e,i)=>`${i+1}. ${e.category}: Rp ${formatNumber(e.amount || 0)} (${e.note || '-'})`).join('\n') || '- Tidak ada pengeluaran';
     if(activeStock.length) {
@@ -2122,6 +2427,8 @@ function loadReportData(type) {
     currentReportType = type;
     const chart = document.getElementById('salesChart');
     const summary = document.getElementById('reportSummary');
+    const reportTxs = getVisibleTransactions();
+    const reportExpenses = getVisibleExpenses();
 
     if(type === 'daily') {
         const days = {};
@@ -2131,11 +2438,11 @@ function loadReportData(type) {
             const key = d.toISOString().split('T')[0];
             days[key] = {label: d.toLocaleDateString('id-ID',{weekday:'short'}), total:0, expense:0, count:0};
         }
-        state.transactions.forEach(t => {
+        reportTxs.forEach(t => {
             const d = t.date.split('T')[0];
             if(days[d]) { days[d].total += t.total || 0; days[d].count++; }
         });
-        state.expenses.forEach(e => {
+        reportExpenses.forEach(e => {
             if(days[e.date]) days[e.date].expense += e.amount || 0;
         });
 
@@ -2159,13 +2466,13 @@ function loadReportData(type) {
         `;
     } else if(type === 'monthly') {
         const months = {};
-        state.transactions.forEach(t => {
+        reportTxs.forEach(t => {
             const m = t.date.slice(0, 7);
             if(!months[m]) months[m] = {label: m, total:0, expense:0, count:0};
             months[m].total += t.total || 0;
             months[m].count++;
         });
-        state.expenses.forEach(e => {
+        reportExpenses.forEach(e => {
             const m = e.date ? e.date.slice(0, 7) : '';
             if(!m) return;
             if(!months[m]) months[m] = {label: m, total:0, expense:0, count:0};
@@ -2190,32 +2497,23 @@ function loadReportData(type) {
             <div class="setting-item"><div class="setting-info"><div class="setting-name">Saldo Bersih 6 Bulan Terakhir</div></div><div class="setting-action">Rp ${formatNumber(total-expense)}</div></div>
         `;
     } else {
-        const products = {};
-        state.transactions.forEach(t => {
-            t.items.forEach(i => {
-                if(!products[i.name]) products[i.name] = {count:0, revenue:0};
-                products[i.name].count += i.qty;
-                products[i.name].revenue += i.price * i.qty;
-            });
-        });
-
-        const sorted = Object.entries(products).sort((a,b) => b[1].count - a[1].count).slice(0, 7);
-        const maxVal = Math.max(...sorted.map(v => v[1].count), 1);
+        const sorted = buildVariantOrderSummary(reportTxs).slice(0, 7);
+        const maxVal = Math.max(...sorted.map(v => v.qty), 1);
 
         chart.innerHTML = sorted.length ? sorted.map(v => `
-            <div class="chart-bar-item" style="height:${(v[1].count/maxVal*100)}%">
-                <span class="bar-value">${v[1].count}</span>
-                <span class="bar-label">${v[0].substring(0,8)}</span>
+            <div class="chart-bar-item" style="height:${(v.qty/maxVal*100)}%">
+                <span class="bar-value">${v.qty}</span>
+                <span class="bar-label">${v.name.substring(0,8)}</span>
             </div>
         `).join('') : '<div class="empty-state"><div class="empty-icon">📊</div><p>Belum ada data produk</p></div>';
 
         summary.innerHTML = sorted.length ? sorted.map(v => `
             <div class="setting-item">
                 <div class="setting-info">
-                    <div class="setting-name">${v[0]}</div>
-                    <div class="setting-desc">${v[1].count} terjual</div>
+                    <div class="setting-name">${v.name} (${v.variant})</div>
+                    <div class="setting-desc">${v.qty} terjual</div>
                 </div>
-                <div class="setting-action">Rp ${formatNumber(v[1].revenue)}</div>
+                <div class="setting-action">Rp ${formatNumber(v.revenue)}</div>
             </div>
         `).join('') : '<div class="empty-state"><p>Belum ada transaksi produk.</p></div>';
     }
@@ -2362,9 +2660,325 @@ function importData() {
 }
 
 
+// ==================== HPP PRODUCT ANALYSIS ====================
+function ensureHppData() {
+    if(!state.hppData || typeof state.hppData !== 'object') state.hppData = {recipes:{}};
+    if(!state.hppData.recipes || typeof state.hppData.recipes !== 'object') state.hppData.recipes = {};
+}
+
+function hppEscape(value) {
+    return String(value ?? '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+}
+
+function hppKey(productId, variant) {
+    return String(productId || '').replace(/[^a-zA-Z0-9_-]/g, '') + '::' + String(variant || 'Dingin').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+}
+
+function hppMoney(value) {
+    const n = Math.round(Number(value) || 0);
+    return 'Rp ' + formatNumber(n);
+}
+
+function hppNumber(value) {
+    const n = Number(value) || 0;
+    return Math.round(n * 100) / 100;
+}
+
+function hppKnownPrice(materialName) {
+    ensureHppData();
+    const target = String(materialName || '').trim().toLowerCase();
+    if(!target) return 0;
+    for(const recipe of Object.values(state.hppData.recipes || {})) {
+        for(const row of (recipe.materials || [])) {
+            if(String(row.name || '').trim().toLowerCase() === target && Number(row.price) > 0) return Number(row.price);
+        }
+    }
+    return 0;
+}
+
+function hppMaterial(name, usage, unit) {
+    return {name, usage:Number(usage) || 0, unit:unit || 'pcs', price:hppKnownPrice(name)};
+}
+
+function defaultHppRowsForProduct(product, variant) {
+    const name = String(product?.name || '').toUpperCase();
+    const rows = [];
+    const add = (material, usage, unit) => rows.push(hppMaterial(material, usage, unit));
+
+    if(name.includes('RENJANA')) { add('Konsentrat', 60, 'ml'); add('UHT', 80, 'ml'); add('Gula Aren', 10, 'ml'); }
+    else if(name.includes('SAKALA')) { add('Konsentrat', 40, 'ml'); add('UHT', 100, 'ml'); add('Gula Aren', 10, 'ml'); }
+    else if(name.includes('KAHWA')) { add('Robusta', 2, 'gr'); add('Sirup Vanilla', 5, 'ml'); add('Fruktosa', 10, 'ml'); add('Air Mineral', 130, 'ml'); add('Gula Aren', 10, 'ml'); }
+    else if(name.includes('AMERICANO')) { add('Robusta', 2, 'gr'); add('Air Mineral', 130, 'ml'); }
+    else if(name.includes('MATCHAPRESSO')) { add('Kental Manis', 15, 'ml'); add('Krimer', 15, 'gr'); add('Matcha', 18, 'gr'); add('Robusta', 2, 'gr'); add('Air Hangat', 50, 'ml'); add('UHT', 80, 'ml'); }
+    else if(name.includes('MATCHA AREN')) { add('Gula Aren', 15, 'ml'); add('Matcha', 18, 'gr'); add('Kental Manis', 15, 'ml'); add('Air Hangat', 15, 'ml'); add('UHT', 100, 'ml'); }
+    else if(name.includes('MATCHA')) { add('Kental Manis', 20, 'ml'); add('Matcha', 20, 'gr'); add('UHT', 100, 'ml'); }
+    else if(name.includes('COFFEE MILO')) { add('Kental Manis', 10, 'ml'); add('Robusta', 2, 'gr'); add('Milo', 35, 'gr'); add('Air Hangat', 50, 'ml'); add('UHT', 50, 'ml'); }
+    else if(name.includes('MILO')) { add('Milo', 35, 'gr'); add('Air Hangat', 50, 'ml'); add('UHT', 50, 'ml'); if(name.includes('BUTTERSCOTCH') || name.includes('CARAMEL') || name.includes('HAZELNUT')) add('Sirup', 15, 'ml'); }
+    else if(name.includes('CARAMEL') || name.includes('HAZELNUT') || name.includes('BUTTERSCOTCH')) { add('Konsentrat', 40, 'ml'); add('Sirup', 15, 'ml'); add('UHT', 100, 'ml'); }
+    else if(name.includes('CHOCO') || name.includes('TARO') || name.includes('REDVELVET')) { add('Kental Manis', 20, 'ml'); add('Bubuk Rasa', 20, 'gr'); add('UHT', 100, 'ml'); }
+    else { add('Bahan Utama', 1, 'porsi'); }
+
+    DEFAULT_HPP_FIXED_ITEMS.forEach(row => {
+        const usage = row.name === 'Es Batu' && String(variant) === 'Hangat' ? 0 : row.usage;
+        rows.push({name:row.name, usage, unit:row.unit, price:hppKnownPrice(row.name)});
+    });
+    return rows;
+}
+
+function getSelectedHppProduct() {
+    const id = document.getElementById('hppProductSelect')?.value;
+    return (state.menu || []).find(item => String(item.id) === String(id)) || (state.menu || [])[0] || null;
+}
+
+function getSelectedHppVariant() {
+    return document.getElementById('hppVariantSelect')?.value || 'Dingin';
+}
+
+function openHppModal() {
+    if(!isAdminUser()) { showToast('Fitur HPP hanya untuk admin'); return; }
+    ensureHppData();
+    const productSelect = document.getElementById('hppProductSelect');
+    if(productSelect) {
+        productSelect.innerHTML = (state.menu || []).map(item => `<option value="${hppEscape(item.id)}">${hppEscape(item.name)}</option>`).join('');
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    const start = document.getElementById('hppStartDate');
+    const end = document.getElementById('hppEndDate');
+    if(start && !start.value) start.value = today;
+    if(end && !end.value) end.value = today;
+    renderHppEditor();
+    renderHppSavedList();
+    openModal('modalHpp');
+}
+
+function renderHppEditor() {
+    ensureHppData();
+    const product = getSelectedHppProduct();
+    if(!product) return;
+    const variant = getSelectedHppVariant();
+    const key = hppKey(product.id, variant);
+    const saved = state.hppData.recipes[key];
+    const rows = saved && Array.isArray(saved.materials) && saved.materials.length ? saved.materials : defaultHppRowsForProduct(product, variant);
+    renderHppRows(rows);
+    updateHppSummary();
+}
+
+function renderHppRows(rows) {
+    const body = document.getElementById('hppRowsBody');
+    if(!body) return;
+    body.innerHTML = (rows || []).map(row => `
+        <tr class="hpp-material-row">
+            <td><input data-field="name" value="${hppEscape(row.name || '')}" oninput="updateHppSummary()" placeholder="Nama bahan"></td>
+            <td><input data-field="usage" type="number" min="0" step="0.01" value="${hppEscape(row.usage ?? 0)}" oninput="updateHppSummary()"></td>
+            <td><input data-field="unit" value="${hppEscape(row.unit || 'pcs')}" oninput="updateHppSummary()"></td>
+            <td><input data-field="price" type="number" min="0" step="0.01" value="${hppEscape(row.price ?? 0)}" oninput="updateHppSummary()"></td>
+            <td class="hpp-total-cell" data-total-usage>-</td>
+            <td class="hpp-total-cell" data-row-cost>Rp 0</td>
+            <td><button type="button" class="hpp-mini-btn danger" onclick="removeHppRow(this)">Hapus</button></td>
+        </tr>
+    `).join('');
+}
+
+function hppCollectRows() {
+    const rows = [];
+    document.querySelectorAll('#hppRowsBody .hpp-material-row').forEach(tr => {
+        const name = tr.querySelector('[data-field="name"]')?.value.trim() || '';
+        const usage = Number(tr.querySelector('[data-field="usage"]')?.value) || 0;
+        const unit = tr.querySelector('[data-field="unit"]')?.value.trim() || 'pcs';
+        const price = Number(tr.querySelector('[data-field="price"]')?.value) || 0;
+        if(name) rows.push({name, usage, unit, price});
+    });
+    return rows;
+}
+
+function addHppMaterialRow() {
+    const rows = hppCollectRows();
+    rows.push({name:'', usage:1, unit:'pcs', price:0});
+    renderHppRows(rows);
+    updateHppSummary();
+    const last = document.querySelector('#hppRowsBody .hpp-material-row:last-child [data-field="name"]');
+    if(last) last.focus();
+}
+
+function removeHppRow(btn) {
+    btn.closest('tr')?.remove();
+    updateHppSummary();
+}
+
+function resetHppDefaultRows() {
+    const product = getSelectedHppProduct();
+    if(!product) return;
+    renderHppRows(defaultHppRowsForProduct(product, getSelectedHppVariant()));
+    updateHppSummary();
+}
+
+function hppSalesSummary(product, variant) {
+    const start = document.getElementById('hppStartDate')?.value || '';
+    const end = document.getElementById('hppEndDate')?.value || '';
+    const selectedVariant = String(variant || '').trim();
+    let qty = 0;
+    let revenue = 0;
+    (state.transactions || []).forEach(tx => {
+        const d = dateKeyFromIso(tx.date);
+        if(start && d < start) return;
+        if(end && d > end) return;
+        (tx.items || []).forEach(item => {
+            const sameProduct = String(item.id || '') === String(product.id || '') || String(item.name || '').trim().toLowerCase() === String(product.name || '').trim().toLowerCase();
+            const sameVariant = !selectedVariant || String(item.variant || 'Tanpa varian') === selectedVariant;
+            if(sameProduct && sameVariant) {
+                const itemQty = parseInt(item.qty) || 1;
+                qty += itemQty;
+                revenue += (parseInt(item.price) || product.price || 0) * itemQty;
+            }
+        });
+    });
+    return {qty, revenue};
+}
+
+function updateHppSummary() {
+    const product = getSelectedHppProduct();
+    if(!product) return;
+    const variant = getSelectedHppVariant();
+    const rows = hppCollectRows();
+    const sales = hppSalesSummary(product, variant);
+    let hppPerCup = 0;
+    document.querySelectorAll('#hppRowsBody .hpp-material-row').forEach((tr, index) => {
+        const row = rows[index] || {usage:0, unit:'', price:0};
+        const rowCost = (Number(row.usage) || 0) * (Number(row.price) || 0);
+        hppPerCup += rowCost;
+        const totalUsageEl = tr.querySelector('[data-total-usage]');
+        const rowCostEl = tr.querySelector('[data-row-cost]');
+        if(totalUsageEl) totalUsageEl.textContent = hppNumber((Number(row.usage) || 0) * sales.qty) + ' ' + (row.unit || '');
+        if(rowCostEl) rowCostEl.textContent = hppMoney(rowCost);
+    });
+    const sellingPrice = Number(product.price) || 0;
+    const marginPerCup = sellingPrice - hppPerCup;
+    const totalHpp = hppPerCup * sales.qty;
+    const totalMargin = sales.revenue - totalHpp;
+    const marginPct = sellingPrice > 0 ? Math.round((marginPerCup / sellingPrice) * 1000) / 10 : 0;
+    const summary = document.getElementById('hppSummaryCards');
+    if(summary) summary.innerHTML = `
+        <div class="hpp-summary-card"><span>Harga Jual / Cup</span><strong>${hppMoney(sellingPrice)}</strong></div>
+        <div class="hpp-summary-card"><span>HPP / Cup</span><strong>${hppMoney(hppPerCup)}</strong></div>
+        <div class="hpp-summary-card"><span>Margin / Cup</span><strong>${hppMoney(marginPerCup)} (${marginPct}%)</strong></div>
+        <div class="hpp-summary-card"><span>Cup Terjual Periode</span><strong>${sales.qty} cup</strong></div>
+        <div class="hpp-summary-card"><span>Omzet Produk Periode</span><strong>${hppMoney(sales.revenue)}</strong></div>
+        <div class="hpp-summary-card"><span>Total HPP Periode</span><strong>${hppMoney(totalHpp)}</strong></div>
+        <div class="hpp-summary-card"><span>Estimasi Margin Periode</span><strong>${hppMoney(totalMargin)}</strong></div>
+        <div class="hpp-summary-card"><span>Jumlah Item Bahan</span><strong>${rows.length}</strong></div>
+    `;
+}
+
+function saveHppRecipe() {
+    if(!isAdminUser()) { showToast('Fitur HPP hanya untuk admin'); return; }
+    ensureHppData();
+    const product = getSelectedHppProduct();
+    if(!product) return;
+    const variant = getSelectedHppVariant();
+    const materials = hppCollectRows();
+    if(!materials.length) { showToast('Tambahkan minimal satu bahan'); return; }
+    const key = hppKey(product.id, variant);
+    state.hppData.recipes[key] = {
+        key,
+        productId: product.id,
+        productName: product.name,
+        variant,
+        sellingPrice: Number(product.price) || 0,
+        materials,
+        updatedAt: new Date().toISOString(),
+        updatedBy: state.currentUser ? state.currentUser.id : 'admin'
+    };
+    saveData();
+    renderHppSavedList();
+    updateHppSummary();
+    showToast('HPP produk disimpan');
+}
+
+function hppCostOfMaterials(materials) {
+    return (materials || []).reduce((sum, row) => sum + ((Number(row.usage) || 0) * (Number(row.price) || 0)), 0);
+}
+
+function renderHppSavedList() {
+    ensureHppData();
+    const list = document.getElementById('hppSavedList');
+    if(!list) return;
+    const entries = Object.values(state.hppData.recipes || {}).sort((a,b) => String(a.productName || '').localeCompare(String(b.productName || '')) || String(a.variant || '').localeCompare(String(b.variant || '')));
+    if(!entries.length) {
+        list.innerHTML = '<div class="empty-state"><p>Belum ada HPP yang disimpan.</p></div>';
+        return;
+    }
+    list.innerHTML = entries.map(recipe => {
+        const cost = hppCostOfMaterials(recipe.materials);
+        const price = Number(recipe.sellingPrice) || 0;
+        const margin = price - cost;
+        const pct = price > 0 ? Math.round((margin / price) * 1000) / 10 : 0;
+        return `
+            <div class="hpp-saved-item">
+                <div>
+                    <div class="hpp-saved-title">${hppEscape(recipe.productName)} (${hppEscape(recipe.variant)})</div>
+                    <div class="hpp-saved-meta">HPP ${hppMoney(cost)} / cup - Margin ${hppMoney(margin)} (${pct}%) - ${recipe.materials?.length || 0} bahan</div>
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+                    <button type="button" class="hpp-mini-btn" onclick="loadHppRecipeByKey('${hppEscape(recipe.key)}')">Buka</button>
+                    <button type="button" class="hpp-mini-btn danger" onclick="deleteHppRecipe('${hppEscape(recipe.key)}')">Hapus</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function loadHppRecipeByKey(key) {
+    ensureHppData();
+    const recipe = state.hppData.recipes[key];
+    if(!recipe) return;
+    const productSelect = document.getElementById('hppProductSelect');
+    const variantSelect = document.getElementById('hppVariantSelect');
+    if(productSelect) productSelect.value = recipe.productId;
+    if(variantSelect) variantSelect.value = recipe.variant || 'Dingin';
+    renderHppRows(recipe.materials || []);
+    updateHppSummary();
+}
+
+function deleteHppRecipe(key) {
+    if(!isAdminUser()) { showToast('Fitur HPP hanya untuk admin'); return; }
+    ensureHppData();
+    if(!state.hppData.recipes[key]) return;
+    if(!confirm('Hapus HPP produk ini?')) return;
+    delete state.hppData.recipes[key];
+    saveData();
+    renderHppEditor();
+    renderHppSavedList();
+    showToast('HPP produk dihapus');
+}
+
+function exportHppCsv() {
+    ensureHppData();
+    const entries = Object.values(state.hppData.recipes || {});
+    if(!entries.length) { showToast('Belum ada data HPP'); return; }
+    let csv = 'Produk,Varian,Harga_Jual,HPP_Per_Cup,Margin_Per_Cup,Margin_Persen,Bahan,Pemakaian_Per_Cup,Satuan,Harga_Per_Satuan,Biaya_Per_Cup\n';
+    entries.forEach(recipe => {
+        const cost = hppCostOfMaterials(recipe.materials);
+        const price = Number(recipe.sellingPrice) || 0;
+        const margin = price - cost;
+        const pct = price > 0 ? Math.round((margin / price) * 1000) / 10 : 0;
+        (recipe.materials || []).forEach(row => {
+            const rowCost = (Number(row.usage) || 0) * (Number(row.price) || 0);
+            csv += [recipe.productName, recipe.variant, price, Math.round(cost), Math.round(margin), pct, row.name, row.usage, row.unit, row.price, Math.round(rowCost)].map(escapeCsv).join(',') + '\n';
+        });
+    });
+    const blob = new Blob([csv], {type:'text/csv'});
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'hpp_produk_teco_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.click();
+    showToast('CSV HPP berhasil dibuat');
+}
+
+
 function openExpenseModal() {
     if(!state.currentUser) { showToast('Login terlebih dahulu'); return; }
     setDefaultDateInputs();
+    setupExpenseAccess();
     resetExpenseForm(false);
     renderExpenseList();
     openModal('modalExpense');
@@ -2387,7 +3001,7 @@ function resetExpenseForm(clearValues = true) {
 }
 
 function canManageExpense(e) {
-    return state.currentUser && (state.currentUser.role === 'admin' || e.cashier === state.currentUser.id);
+    return state.currentUser && (isAdminUser() || canCurrentUserAccessExpense(e));
 }
 
 function addDailyExpense() {
@@ -2411,18 +3025,25 @@ function addDailyExpense() {
         showToast('Pengeluaran berhasil disimpan');
     }
     saveData();
+    const filterDate = document.getElementById('expenseFilterDate');
+    if(filterDate) filterDate.value = date;
     resetExpenseForm();
     renderExpenseList();
     updateStats();
 }
 
 function renderExpenseList() {
+    setupExpenseAccess();
     const list = document.getElementById('expenseList');
     if(!list) return;
-    let expenses = [...(state.expenses || [])].sort((a,b)=>(b.updatedAt || b.createdAt || b.date).localeCompare(a.updatedAt || a.createdAt || a.date));
-    if(state.currentUser?.role !== 'admin') expenses = expenses.filter(e => e.cashier === state.currentUser?.id);
-    expenses = expenses.slice(0, 30);
-    if(!expenses.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><p>Belum ada catatan pengeluaran</p></div>'; return; }
+    const dateFilter = document.getElementById('expenseFilterDate')?.value || '';
+    const cashierFilter = isAdminUser() ? (document.getElementById('expenseFilterUser')?.value || '') : state.currentUser?.id;
+    let expenses = getVisibleExpenses({date: dateFilter, cashier: cashierFilter})
+        .sort((a,b)=>(b.updatedAt || b.createdAt || b.date || '').localeCompare(a.updatedAt || a.createdAt || a.date || ''));
+    const summary = document.getElementById('expenseListSummary');
+    const total = expenses.reduce((s,e) => s + (parseInt(e.amount) || 0), 0);
+    if(summary) summary.textContent = `${expenses.length} catatan · Total Rp ${formatNumber(total)}${dateFilter ? ' · Tanggal ' + dateFilter : ''}`;
+    if(!expenses.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><p>Tidak ada pengeluaran pada tanggal ini</p></div>'; return; }
     list.innerHTML = expenses.map(e => `
         <div class="expense-item">
             <div class="expense-icon">💸</div>
@@ -2698,6 +3319,7 @@ function backupData() {
         transactions: state.transactions,
         expenses: state.expenses,
         stockNotes: state.stockNotes,
+        hppData: state.hppData,
         menu: state.menu,
         users: state.users,
         settings: state.settings,
