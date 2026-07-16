@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.0.0';
+  const VERSION = '3.0.1';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -1340,6 +1340,21 @@
       </tr>
     `).join('');
   }
+  function expenseClassificationRows(rows) {
+    if (!rows.length) {
+      return '<tr><td colspan="5" class="teco-native-empty">Belum ada pengeluaran pada periode ini.</td></tr>';
+    }
+    return rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${escapeHtml(row.note)}</td>
+        <td class="teco-native-number">${row.count}</td>
+        <td class="teco-native-number">${formatMoney(row.amount)}</td>
+      </tr>
+    `).join('');
+  }
+
   function filterExpenses(expenses, mode, period, cashier) {
     return expenses.filter((expense) => {
       const periodMatch = matchesPeriod(expense.date, mode, period);
@@ -1420,6 +1435,19 @@
     });
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }
+  function aggregateExpenseClassifications(expenses) {
+    const map = new Map();
+    expenses.forEach((expense) => {
+      const category = canonical(expense.category || 'Lain-lain') || 'Lain-lain';
+      const note = canonical(expense.note || '-') || '-';
+      const key = `${keyText(category)}::${keyText(note)}`;
+      if (!map.has(key)) map.set(key, { category, note, count: 0, amount: 0 });
+      const row = map.get(key);
+      row.count += 1;
+      row.amount += toNumber(expense.amount);
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category, 'id'));
+  }
   function buildReportData(mode, period, cashier) {
     const root = getPrimaryRoot();
     detectSession(root);
@@ -1435,6 +1463,7 @@
     });
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
+    const expenseClassifications = aggregateExpenseClassifications(expenses);
     const products = aggregateProducts(transactions);
     const materials = aggregateMaterials(products);
     const adjustments = reportAdjustments(mode, period, cashier);
@@ -1457,6 +1486,7 @@
       cashierLabel: cashier === 'ALL' ? 'Semua Kasir' : cashier,
       transactions,
       expenses,
+      expenseClassifications,
       products,
       materials,
       payments: aggregatePayments(transactions),
@@ -1507,7 +1537,16 @@
       lines.push('• Tidak ada pembayaran pada periode ini');
     }
 
-    lines.push('', '*LAPORAN PENGELUARAN*');
+    lines.push('', '*REKAP PENGELUARAN PER KLASIFIKASI*');
+    if (report.expenseClassifications.length) {
+      report.expenseClassifications.forEach((row) => {
+        lines.push(`• ${row.category} — ${row.note}: ${row.count} transaksi — *${formatMoney(row.amount)}*`);
+      });
+    } else {
+      lines.push('• Tidak ada pengeluaran pada periode ini');
+    }
+
+    lines.push('', '*DETAIL PENGELUARAN*');
     if (report.expenses.length) {
       report.expenses.forEach((expense) => {
         lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note || '-'}`);
@@ -1705,6 +1744,11 @@
       expense.cashier, expense.category, expense.note, expense.amount
     ]));
 
+    const expenseRecap = [['No', 'Kategori', 'Keterangan', 'Frekuensi_Transaksi', 'Total_Nominal']];
+    report.expenseClassifications.forEach((row, index) => expenseRecap.push([
+      index + 1, row.category, row.note, row.count, row.amount
+    ]));
+
     const payments = [['No', 'Tipe_Pembayaran', 'Jumlah_Transaksi', 'Nominal']];
     report.payments.forEach((payment, index) => payments.push([
       index + 1, payment.name, payment.count, payment.amount
@@ -1723,6 +1767,7 @@
       [`Penyesuaian ${suffix}`]: adjustments,
       [`Transaksi ${suffix}`]: transactions,
       [`Pengeluaran ${suffix}`]: expenses,
+      [`Rekap Pengeluaran ${suffix}`]: expenseRecap,
       [`Pembayaran ${suffix}`]: payments
     };
   }
@@ -2295,6 +2340,16 @@
           </div>
         </section>
       </div>
+
+      <section class="teco-native-panel" style="margin-top:12px">
+        <h4>Rekap Pengeluaran per Klasifikasi</h4>
+        <div class="teco-native-table-wrap">
+          <table>
+            <thead><tr><th>No.</th><th>Kategori</th><th>Keterangan</th><th>Frekuensi</th><th>Total Nominal</th></tr></thead>
+            <tbody>${expenseClassificationRows(report.expenseClassifications)}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>

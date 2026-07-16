@@ -1379,6 +1379,7 @@ const DEFAULT_MENU = [
     {id:'p1',name:'Caramel',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p1,badge:'BEST SELLER',desc:'Kopi premium caramel'},
     {id:'p2',name:'Hazelnut',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p2,badge:'',desc:'Kopi premium hazelnut'},
     {id:'p3',name:'Butterscotch',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p3,badge:'',desc:'Kopi premium butterscotch'},
+    {id:'p4',name:'Pistachio',price:12000,category:'premium',emoji:'💎',img:MENU_IMAGES.p3,badge:'NEW',desc:'Kopi premium pistachio',recipe:'KOPSU PISTACHIO'},
     // Non-Coffee
     {id:'n1',name:'Matcha',price:10000,category:'noncoffee',emoji:'🧋',img:MENU_IMAGES.n1,badge:'BEST SELLER',desc:'Minuman matcha'},
     {id:'n2',name:'Redvelvet',price:10000,category:'noncoffee',emoji:'🧋',img:MENU_IMAGES.n2,badge:'',desc:'Red velvet creamy'},
@@ -3004,6 +3005,14 @@ function canManageExpense(e) {
     return state.currentUser && (isAdminUser() || canCurrentUserAccessExpense(e));
 }
 
+function createExpenseRecordId() {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomPart = (window.crypto && typeof window.crypto.randomUUID === 'function')
+        ? window.crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()
+        : Math.random().toString(36).slice(2, 12).toUpperCase();
+    return `EXP-${timestamp}-${randomPart}`;
+}
+
 function addDailyExpense() {
     if(!state.currentUser) { showToast('Login terlebih dahulu'); return; }
     const date = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
@@ -3020,7 +3029,8 @@ function addDailyExpense() {
         state.expenses[idx] = {...state.expenses[idx], date, amount, category, note: note || '-', updatedAt: new Date().toISOString(), updatedBy: state.currentUser.id, updatedByName: state.currentUser.name};
         showToast('Pengeluaran berhasil diperbarui');
     } else {
-        const expense = {id: 'EXP' + Date.now().toString().slice(-8), date, amount, category, note: note || '-', cashier: state.currentUser.id, cashierName: state.currentUser.name, createdAt: new Date().toISOString()};
+        const now = new Date().toISOString();
+        const expense = {id: createExpenseRecordId(), date, amount, category, note: note || '-', cashier: state.currentUser.id, cashierName: state.currentUser.name, createdAt: now, updatedAt: now};
         state.expenses.unshift(expense);
         showToast('Pengeluaran berhasil disimpan');
     }
@@ -3805,7 +3815,7 @@ body.dark .teco-native-modal-card {
 (function () {
   'use strict';
 
-  const VERSION = '3.0.0';
+  const VERSION = '3.0.1';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = {"version":"1.1.0","source":"HPP_Resep_Bahan_Penggunaan.xlsx","timezone":"Asia/Jakarta","concentrateBatchYieldMl":1000,"notes":["Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.","Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren.","Nama resep KOPI MILO dinormalisasi menjadi COFFEE MILO agar sesuai dengan nama menu.","MILO MALAYSIA memakai resep Milo original tanpa sirup rasa."],"recipes":{"KONSENTRAT":[{"material":"Kental Manis","qty":200.0,"unit":"ml"},{"material":"Krimer","qty":100.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":100.0,"unit":"ml"},{"material":"Robusta","qty":45.0,"unit":"gr"},{"material":"Air","qty":800.0,"unit":"ml"}],"RENJANA":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"SAKALA":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"KAHWA":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":5.0,"unit":"ml"},{"material":"Fruktosa","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"AMERICANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"PREMIUM SERIES (BUTTERSCOTCH, CARAMEL, HAZELNUT)":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)":[{"material":"Kental Manis","qty":20.0,"unit":"ml"},{"material":"Bubuk Rasa","qty":20.0,"unit":"gr"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHAPRESSO":[{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Krimer","qty":15.0,"unit":"gr"},{"material":"Bubuk Rasa","qty":18.0,"unit":"gr"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHA AREN":[{"material":"Gula Aren","qty":15.0,"unit":"ml"},{"material":"Matcha","qty":18.0,"unit":"gr"},{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Air Hangat","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO BUTTERSCOTCH, CARAMEL, HAZELNUT":[{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"REDBERRYCANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Lemon","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"GOLDEN DRIFT":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Leci","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"LUMA PEARL":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Passion Fruit","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"KOPSU PISTACHIO":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"Sirup Pistachio","qty":15.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"COFFEE MILO":[{"material":"Kental Manis","qty":10.0,"unit":"ml"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO MALAYSIA":[{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}]}};
@@ -4082,7 +4092,7 @@ body.dark .teco-native-modal-card {
   }
   function canonical(value) {
     return String(value == null ? '' : value)
-      .replace(/\bSakata\b/gi, 'Sakala')
+      .replace(/\bSakala\b/gi, 'Sakala')
       .replace(/\bKopi\s+Milo\b/gi, 'Coffee Milo')
       .replace(/\s+/g, ' ')
       .trim();
@@ -5144,6 +5154,21 @@ body.dark .teco-native-modal-card {
       </tr>
     `).join('');
   }
+  function expenseClassificationRows(rows) {
+    if (!rows.length) {
+      return '<tr><td colspan="5" class="teco-native-empty">Belum ada pengeluaran pada periode ini.</td></tr>';
+    }
+    return rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td>${escapeHtml(row.note)}</td>
+        <td class="teco-native-number">${row.count}</td>
+        <td class="teco-native-number">${formatMoney(row.amount)}</td>
+      </tr>
+    `).join('');
+  }
+
   function filterExpenses(expenses, mode, period, cashier) {
     return expenses.filter((expense) => {
       const periodMatch = matchesPeriod(expense.date, mode, period);
@@ -5224,6 +5249,19 @@ body.dark .teco-native-modal-card {
     });
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount);
   }
+  function aggregateExpenseClassifications(expenses) {
+    const map = new Map();
+    expenses.forEach((expense) => {
+      const category = canonical(expense.category || 'Lain-lain') || 'Lain-lain';
+      const note = canonical(expense.note || '-') || '-';
+      const key = `${keyText(category)}::${keyText(note)}`;
+      if (!map.has(key)) map.set(key, { category, note, count: 0, amount: 0 });
+      const row = map.get(key);
+      row.count += 1;
+      row.amount += toNumber(expense.amount);
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category, 'id'));
+  }
   function buildReportData(mode, period, cashier) {
     const root = getPrimaryRoot();
     detectSession(root);
@@ -5239,6 +5277,7 @@ body.dark .teco-native-modal-card {
     });
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
+    const expenseClassifications = aggregateExpenseClassifications(expenses);
     const products = aggregateProducts(transactions);
     const materials = aggregateMaterials(products);
     const adjustments = reportAdjustments(mode, period, cashier);
@@ -5261,6 +5300,7 @@ body.dark .teco-native-modal-card {
       cashierLabel: cashier === 'ALL' ? 'Semua Kasir' : cashier,
       transactions,
       expenses,
+      expenseClassifications,
       products,
       materials,
       payments: aggregatePayments(transactions),
@@ -5311,7 +5351,16 @@ body.dark .teco-native-modal-card {
       lines.push('• Tidak ada pembayaran pada periode ini');
     }
 
-    lines.push('', '*LAPORAN PENGELUARAN*');
+    lines.push('', '*REKAP PENGELUARAN PER KLASIFIKASI*');
+    if (report.expenseClassifications.length) {
+      report.expenseClassifications.forEach((row) => {
+        lines.push(`• ${row.category} — ${row.note}: ${row.count} transaksi — *${formatMoney(row.amount)}*`);
+      });
+    } else {
+      lines.push('• Tidak ada pengeluaran pada periode ini');
+    }
+
+    lines.push('', '*DETAIL PENGELUARAN*');
     if (report.expenses.length) {
       report.expenses.forEach((expense) => {
         lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note || '-'}`);
@@ -5509,6 +5558,11 @@ body.dark .teco-native-modal-card {
       expense.cashier, expense.category, expense.note, expense.amount
     ]));
 
+    const expenseRecap = [['No', 'Kategori', 'Keterangan', 'Frekuensi_Transaksi', 'Total_Nominal']];
+    report.expenseClassifications.forEach((row, index) => expenseRecap.push([
+      index + 1, row.category, row.note, row.count, row.amount
+    ]));
+
     const payments = [['No', 'Tipe_Pembayaran', 'Jumlah_Transaksi', 'Nominal']];
     report.payments.forEach((payment, index) => payments.push([
       index + 1, payment.name, payment.count, payment.amount
@@ -5527,6 +5581,7 @@ body.dark .teco-native-modal-card {
       [`Penyesuaian ${suffix}`]: adjustments,
       [`Transaksi ${suffix}`]: transactions,
       [`Pengeluaran ${suffix}`]: expenses,
+      [`Rekap Pengeluaran ${suffix}`]: expenseRecap,
       [`Pembayaran ${suffix}`]: payments
     };
   }
@@ -6099,6 +6154,16 @@ body.dark .teco-native-modal-card {
           </div>
         </section>
       </div>
+
+      <section class="teco-native-panel" style="margin-top:12px">
+        <h4>Rekap Pengeluaran per Klasifikasi</h4>
+        <div class="teco-native-table-wrap">
+          <table>
+            <thead><tr><th>No.</th><th>Kategori</th><th>Keterangan</th><th>Frekuensi</th><th>Total Nominal</th></tr></thead>
+            <tbody>${expenseClassificationRows(report.expenseClassifications)}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.1.0';
+  const VERSION = '3.1.1';
   const PRIMARY_KEY = 'teco_pos_data';
   const EMERGENCY_KEY = 'teco_pos_emergency_backup_v3';
   const DEVICE_KEY = 'teco_pos_device_id_v3';
@@ -141,14 +141,64 @@
     return JSON.stringify(b).length >= JSON.stringify(a).length ? b : a;
   }
 
+  function dateOnly(value) {
+    const text = String(value || '');
+    const match = text.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : text;
+  }
+
+  function expenseFingerprint(row) {
+    return [
+      dateOnly(row && row.date),
+      String(row && (row.cashier || row.cashierName) || '').trim().toLowerCase(),
+      Number(row && row.amount || 0),
+      String(row && row.category || '').trim().toLowerCase(),
+      String(row && row.note || '').trim().toLowerCase(),
+      String(row && row.createdAt || '')
+    ].join('::');
+  }
+
+  function isExpenseIdCollision(a, b) {
+    if (!a || !b || expenseFingerprint(a) === expenseFingerprint(b)) return false;
+    const createdA = String(a.createdAt || '');
+    const createdB = String(b.createdAt || '');
+    if (createdA && createdB && createdA !== createdB) return true;
+    const dateA = dateOnly(a.date);
+    const dateB = dateOnly(b.date);
+    return Boolean(dateA && dateB && dateA !== dateB);
+  }
+
+  function uniqueCollisionId(baseId, row, map) {
+    const suffix = hashText(expenseFingerprint(row)).toUpperCase();
+    let id = `${baseId}-DUP-${suffix}`;
+    let counter = 2;
+    while (map.has(id) && expenseFingerprint(map.get(id)) !== expenseFingerprint(row)) {
+      id = `${baseId}-DUP-${suffix}-${counter++}`;
+    }
+    return id;
+  }
+
   function mergeTombstones(a, b) {
     return { ...(a || {}), ...(b || {}) };
   }
 
   function mergeRecords(localRows, remoteRows, prefix, kind, tombstones) {
     const map = new Map();
-    ensureRecordIds(remoteRows, prefix, kind).forEach((row) => map.set(row.id, row));
-    ensureRecordIds(localRows, prefix, kind).forEach((row) => map.set(row.id, preferRecord(map.get(row.id), row)));
+    const mergeOne = (row) => {
+      const existing = map.get(row.id);
+      if (!existing) {
+        map.set(row.id, row);
+        return;
+      }
+      if (kind === 'expense' && isExpenseIdCollision(existing, row)) {
+        const repaired = { ...row, id: uniqueCollisionId(row.id, row, map), recoveredFromIdCollision: true };
+        map.set(repaired.id, repaired);
+        return;
+      }
+      map.set(row.id, preferRecord(existing, row));
+    };
+    ensureRecordIds(remoteRows, prefix, kind).forEach(mergeOne);
+    ensureRecordIds(localRows, prefix, kind).forEach(mergeOne);
 
     const tomb = tombstones || {};
     for (const id of Object.keys(tomb)) map.delete(id);
@@ -827,7 +877,7 @@
     const month = document.getElementById('exportMonth');
     if (month && !month.value) month.value = new Date().toISOString().slice(0, 7);
     const version = document.querySelector('.version-tag');
-    if (version) version.textContent = 'v3.1.0 · Cloud-safe · Storage-safe';
+    if (version) version.textContent = 'v3.1.1 · Expense-safe · Cloud-safe';
     const storageInfo = document.getElementById('syncStorageStats');
     if (storageInfo) {
       const bytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;

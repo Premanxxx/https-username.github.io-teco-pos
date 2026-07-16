@@ -12,7 +12,7 @@
   if (window.__TECO_ANALYTICS_ADDON__) return;
   window.__TECO_ANALYTICS_ADDON__ = true;
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
   const TZ = 'Asia/Jakarta';
   const SETTINGS_KEY = 'teco_analytics_settings_v1';
   const ADJUSTMENTS_KEY = 'teco_analytics_report_adjustments_v1';
@@ -665,7 +665,11 @@
   function dedupeExpenses(list) {
     const map = new Map();
     list.forEach((row) => {
-      const key = fingerprintExpense(row);
+      const fingerprint = fingerprintExpense(row);
+      const id = String(row.id || '').trim();
+      // ID membedakan dua transaksi yang memang terpisah, sedangkan fingerprint
+      // mencegah salinan transaksi yang sama dari beberapa sumber dihitung ganda.
+      const key = id ? `${id}|${fingerprint}` : `LEGACY|${fingerprint}`;
       if (!map.has(key)) map.set(key, row);
     });
     return Array.from(map.values()).sort((a, b) => b.date - a.date);
@@ -1146,6 +1150,20 @@
     return state.adjustments.filter((row) => adjustmentMatchesPeriod(row, mode));
   }
 
+  function aggregateExpenseClassifications(expenses) {
+    const map = new Map();
+    expenses.forEach((row) => {
+      const category = String(row.category || 'Lain-lain').trim() || 'Lain-lain';
+      const note = String(row.note || '-').trim() || '-';
+      const key = `${normalizeText(category)}|${normalizeText(note)}`;
+      if (!map.has(key)) map.set(key, { category, note, count: 0, amount: 0 });
+      const item = map.get(key);
+      item.count += 1;
+      item.amount += toNumber(row.amount);
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
+  }
+
   function aggregate(mode) {
     const txs = filterTransactions(mode);
     const variants = new Map();
@@ -1201,6 +1219,7 @@
     totalRevenue = Math.max(0, totalRevenue);
     const materialResult = calculateMaterials(variantRows, totalCups);
     const expenses = filterExpenses(mode);
+    const expenseClassifications = aggregateExpenseClassifications(expenses);
     const totalExpenses = expenses.reduce((sum, row) => sum + toNumber(row.amount), 0);
     const adjustmentRevenue = adjustments.reduce((sum, row) => sum + toNumber(row.revenueDelta), 0);
     const paymentRows = Array.from(payments.values()).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
@@ -1209,6 +1228,7 @@
       mode,
       txs,
       expenses,
+      expenseClassifications,
       totalExpenses,
       netRevenue: totalRevenue - totalExpenses,
       adjustmentRevenue,
@@ -1812,6 +1832,13 @@
         <td class="ta-num"><strong>${escapeHtml(formatMeasurement(row.qty, row.unit))}</strong></td>
         <td class="ta-muted">${escapeHtml(row.recipes.join(', '))}</td>
       </tr>`).join('');
+    const expenseRows = report.expenseClassifications.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td><strong>${escapeHtml(row.category)}</strong><br><span class="ta-muted">${escapeHtml(row.note)}</span></td>
+        <td class="ta-num"><strong>${row.count}</strong> transaksi</td>
+        <td class="ta-num"><strong>${formatRupiah(row.amount)}</strong></td>
+      </tr>`).join('');
 
     content.innerHTML = `
       <div class="ta-status">Periode: <strong>${escapeHtml(periodLabel)}</strong> • Sumber: ${escapeHtml(sourceSummary())}${escapeHtml(errorText)}</div>
@@ -1820,6 +1847,7 @@
         <div class="ta-card"><span>Total cup</span><strong>${formatDecimal(report.totalCups)}</strong></div>
         <div class="ta-card"><span>Varian berbeda</span><strong>${report.distinctVariants}</strong></div>
         <div class="ta-card"><span>Omzet</span><strong style="font-size:16px">${formatRupiah(report.totalRevenue)}</strong></div>
+        <div class="ta-card"><span>Pengeluaran</span><strong style="font-size:16px">${formatRupiah(report.totalExpenses)}</strong></div>
         <div class="ta-card"><span>Penyesuaian</span><strong>${report.adjustmentCount}</strong></div>
       </div>
       ${report.adjustmentCount ? `<div class="ta-status" style="margin-bottom:12px">Laporan ini memuat <strong>${report.adjustmentCount}</strong> penyesuaian manual. Transaksi asli tidak diubah.</div>` : ''}
@@ -1827,6 +1855,7 @@
       <div class="ta-grid">
         <section class="ta-panel"><h3>Rekap Varian Terjual</h3><div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>No.</th><th>Varian</th><th class="ta-num">Cup</th><th class="ta-num">Omzet Item</th></tr></thead><tbody>${variantRows || '<tr><td colspan="4" class="ta-muted">Belum ada transaksi pada periode ini.</td></tr>'}</tbody></table></div></section>
         <section class="ta-panel"><h3>Analisis Bahan Terpakai</h3><div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>No.</th><th>Bahan</th><th class="ta-num">Jumlah</th><th>Dipakai oleh</th></tr></thead><tbody>${materialRows || '<tr><td colspan="4" class="ta-muted">Belum ada bahan yang dapat dihitung.</td></tr>'}</tbody></table></div></section>
+        <section class="ta-panel" style="grid-column:1/-1"><h3>Rekap Pengeluaran per Klasifikasi</h3><div class="ta-table-wrap"><table class="ta-table"><thead><tr><th>No.</th><th>Klasifikasi & Keterangan</th><th class="ta-num">Frekuensi</th><th class="ta-num">Total</th></tr></thead><tbody>${expenseRows || '<tr><td colspan="4" class="ta-muted">Belum ada pengeluaran pada periode ini.</td></tr>'}</tbody></table></div></section>
       </div>`;
   }
 
@@ -2061,7 +2090,17 @@
     if (report.adjustmentRevenue) lines.push(`- Penyesuaian laporan tanpa tipe pembayaran: ${formatRupiah(report.adjustmentRevenue)}`);
 
     lines.push('');
-    lines.push('*LAPORAN PENGELUARAN*');
+    lines.push('*REKAP PENGELUARAN PER KLASIFIKASI*');
+    if (!report.expenseClassifications.length) {
+      lines.push('- Tidak ada pengeluaran pada periode ini');
+    } else {
+      report.expenseClassifications.forEach((row, index) => {
+        lines.push(`${index + 1}. ${row.category} — ${row.note}: *${row.count} transaksi / ${formatRupiah(row.amount)}*`);
+      });
+    }
+
+    lines.push('');
+    lines.push('*DETAIL PENGELUARAN*');
     if (!report.expenses.length) {
       lines.push('- Tidak ada pengeluaran pada periode ini');
     } else {
