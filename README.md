@@ -1,9 +1,17 @@
-# Te.Co Pandawa POS v3.2.0
+# Te.Co Pandawa POS v3.3.0
 
-Versi ini menambahkan analisa HPP yang terhubung otomatis ke **Laporan Rekap Cup & Bahan** untuk akun Admin. Laporan menampilkan omzet produk, total HPP, estimasi laba kotor, margin kotor, laba setelah pengeluaran, rata-rata HPP per cup, cakupan data HPP, serta biaya bahan berdasarkan resep.
+Versi ini menambahkan **Master Harga Dasar Bahan** khusus Admin. Harga beli dan isi kemasan bahan seperti Air, Es Batu, Cup, UHT, sirup, gula, krimer, bubuk, dan bahan lain diubah otomatis menjadi harga dasar per `ml`, `gr`, `pcs`, atau satuan lain.
 
-Data HPP disimpan di `teco_pos_data` dan ikut digabungkan secara aman saat sinkronisasi Firebase. Perubahan resep menggunakan waktu pembaruan terbaru, sedangkan resep yang dihapus memakai tombstone agar tidak muncul kembali dari perangkat lain atau data cloud lama.
+Contoh: UHT Rp18.000 dengan isi 1.000 ml menghasilkan harga dasar Rp18/ml. Harga dasar tersebut menjadi patokan tunggal untuk:
 
-Fitur laba dan margin hanya dirender serta diekspor untuk pengguna Admin. Pengguna Kasir tetap melihat laporan operasional tanpa informasi keuntungan.
+- estimasi biaya seluruh komposisi bahan pada laporan;
+- HPP per produk dan varian;
+- total HPP periode;
+- laba kotor, margin, dan laba setelah pengeluaran;
+- laporan WhatsApp dan Excel Admin.
 
-Buka `index.html` melalui GitHub Pages atau jalankan `server.js`. Konfigurasi keamanan dan aktivasi cloud terdapat di `FIREBASE_SETUP.md` serta `database.rules.json`.
+Laporan Admin menampilkan jumlah bahan terpakai, harga dasar per satuan, total biaya per bahan, kelengkapan harga, serta total estimasi biaya semua komposisi. Kasir hanya melihat jumlah kebutuhan bahan tanpa harga, HPP, laba, atau margin.
+
+Data `materialPrices` disimpan dalam `hppData` versi 3 dan ikut disinkronkan melalui Firebase dengan merge berdasarkan `updatedAt`. Penghapusan harga memakai tombstone agar data lama dari perangkat lain tidak muncul kembali.
+
+Buka `index.html` melalui GitHub Pages atau jalankan `server.js`. Petunjuk Firebase terdapat di `FIREBASE_SETUP.md`.

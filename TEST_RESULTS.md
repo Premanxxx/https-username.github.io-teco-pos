@@ -1,4 +1,4 @@
-# Hasil Validasi Te.Co Pandawa POS v3.2.0
+# Hasil Validasi Te.Co Pandawa POS v3.3.0
 
 Tanggal: 2026-07-16
 
@@ -7,34 +7,36 @@ Tanggal: 2026-07-16
 - `teco-native-main-core.js`: lolos `node --check`.
 - `teco-reliability-v3.js`: lolos `node --check`.
 - `server.js`: lolos `node --check`.
-- Seluruh skrip inline pada `index.html`: valid.
-- Seluruh skrip inline pada `index (2).html`: valid.
-- Seluruh skrip inline pada `pos_app_pwa.html`: valid.
+- Seluruh skrip inline pada `index.html`, `index (2).html`, `pos_app_pwa.html`, dan `analytics.html`: valid.
 
-## Uji Perhitungan HPP
+## Uji Harga Dasar dan Biaya Komposisi
 
-Skenario admin dengan 2 cup, omzet produk Rp20.000, dan HPP Rp1.100 per cup menghasilkan:
+- UHT Rp18.000 / 1.000 ml menghasilkan Rp18/ml.
+- Harga Master menggantikan harga lama pada resep HPP.
+- Jumlah pemakaian bahan dihitung dari komposisi resep dikali cup terjual.
+- Biaya setiap bahan dihitung dari jumlah terpakai dikali harga dasar.
+- Total biaya semua komposisi sama dengan penjumlahan biaya seluruh bahan.
+- Total HPP, laba kotor, margin, dan laba setelah pengeluaran dihitung konsisten.
 
-- Total HPP: Rp2.200.
-- Estimasi laba kotor: Rp17.800.
-- Margin kotor: 89%.
-- Pengeluaran: Rp2.000.
-- Estimasi laba setelah pengeluaran: Rp15.800.
-- Cakupan HPP: 100%.
+## Uji Akses Admin dan Kasir
 
-Skenario pengguna Kasir menghasilkan `profitAnalysis = null`, sehingga data HPP dan margin tidak tersedia pada laporan Kasir.
+Pengujian Chromium berbasis injeksi dokumen berhasil memverifikasi:
 
-## Uji Merge Sinkronisasi HPP
+- Admin melihat Master Harga, biaya semua komposisi, HPP, laba, margin, dan kolom harga bahan.
+- Kasir tetap melihat rekap jumlah kebutuhan bahan.
+- Kasir tidak melihat harga dasar, total biaya, HPP, laba, atau margin.
 
-- Resep lokal yang lebih baru mengalahkan resep cloud lama.
-- Resep berbeda dari cloud tetap dipertahankan.
-- Tombstone penghapusan yang lebih baru menghapus resep cloud lama.
-- Resep baru yang waktunya lebih baru daripada tombstone dapat disimpan kembali.
+## Uji Merge Sinkronisasi
+
+- Harga terbaru berdasarkan `updatedAt` dipertahankan.
+- Harga lokal dan cloud untuk bahan berbeda tetap digabung.
+- Tombstone penghapusan yang lebih baru menekan harga cloud lama.
+- Resep HPP dan Master Harga dapat digabung tanpa saling menimpa.
 
 ## Uji Server Lokal
 
-`server.js` diuji pada port alternatif melalui variabel lingkungan `PORT`. Permintaan ke `/` mengembalikan `index.html` dengan status HTTP 200 dan memuat laporan native serta teks Analisa HPP.
+`server.js` diuji pada port alternatif. Permintaan ke `/` mengembalikan `index.html` dengan status HTTP 200.
 
 ## Batas Validasi
 
-Validasi ini mencakup sintaks, logika perhitungan, kontrol peran, merge data HPP, dan penyajian server lokal. Uji koneksi langsung ke proyek Firebase produksi tidak dilakukan karena kredensial dan sesi pengguna produksi tidak tersedia di lingkungan pengujian.
+Uji koneksi langsung ke Firebase produksi tidak dilakukan karena kredensial dan sesi produksi tidak tersedia. Navigasi HTTP/file langsung dari Chromium diblokir oleh kebijakan sandbox pengujian; validasi UI dilakukan dengan injeksi HTML dan seluruh pemeriksaan role lulus.

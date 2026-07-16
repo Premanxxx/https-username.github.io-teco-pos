@@ -1,3 +1,17 @@
+# v3.3.0 — 16 Juli 2026
+
+- Menambahkan Master Harga Dasar Bahan khusus Admin.
+- Menghitung harga dasar otomatis dari harga beli dibagi isi kemasan.
+- Menyediakan bahan awal seperti Air, Es Batu, Cup + Tutup, Plastik Cup, Sedotan, UHT, gula, krimer, kopi, konsentrat, bubuk, dan sirup.
+- Menjadikan harga master sebagai patokan HPP produk dan seluruh komposisi laporan.
+- Menambahkan total estimasi biaya semua bahan pada laporan Rekap Cup & Bahan.
+- Menambahkan harga dasar, total biaya, dan status kelengkapan untuk setiap bahan pada laporan Admin.
+- Menambahkan master harga dan rincian biaya bahan ke laporan WhatsApp serta Excel Admin.
+- Menyembunyikan seluruh harga bahan, HPP, laba, margin, dan sheet biaya dari pengguna Kasir.
+- Menambahkan sinkronisasi `materialPrices` berbasis `updatedAt` dan tombstone `deletedMaterialPrices`.
+- Memigrasikan harga bahan dari resep HPP lama ke Master Harga tanpa menghilangkan resep.
+- Memperbaiki pembukaan halaman laporan native agar tidak memanggil elemen laporan lama yang sudah tidak digunakan.
+
 # v3.2.0 — 16 Juli 2026
 
 - Menghubungkan data resep HPP secara otomatis ke laporan Rekap Cup & Bahan.

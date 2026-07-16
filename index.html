@@ -355,6 +355,16 @@ body.pwa-mode .bottom-nav {
 .hpp-mini-btn{padding:6px 10px;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;background:var(--primary);color:white}
 .hpp-mini-btn.secondary{background:#E9ECEF;color:var(--dark)}
 .hpp-mini-btn.danger{background:#C62828;color:white}
+.hpp-master-section{margin:14px 0 18px;padding:14px;border:1px solid var(--light-gray);border-radius:12px;background:#FBFCFD}
+.hpp-master-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
+.hpp-master-head h3{font-size:15px;margin:0 0 4px}
+.hpp-master-head p{font-size:11px;color:var(--gray);margin:0;max-width:680px}
+.hpp-master-scroll{max-height:340px;overflow:auto}
+.hpp-price-badge,.hpp-price-source{display:inline-block;margin-top:4px;font-size:10px;font-weight:800}
+.hpp-price-badge{padding:4px 7px;border-radius:999px}
+.hpp-price-badge.complete,.hpp-price-source.complete{color:#1B5E20;background:#E8F5E9}
+.hpp-price-badge.warning,.hpp-price-source.warning{color:#B26A00;background:#FFF3E0}
+.hpp-price-source{padding:2px 5px;border-radius:5px}
 @media(max-width:760px){.hpp-toolbar,.hpp-summary-grid{grid-template-columns:1fr}.hpp-summary-card strong{font-size:16px}}
 .code-box{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background:#212121;color:white;border-radius:12px;padding:12px;font-size:11px;line-height:1.5;white-space:pre-wrap;overflow:auto;max-height:240px}
 @media(max-width:600px){.sync-pill{display:none}.modal-footer{flex-wrap:wrap}}
@@ -395,7 +405,7 @@ body.pwa-mode .bottom-nav {
 <button onclick="doLogin()">Masuk</button>
 <div class="login-error" id="loginError">PIN salah atau user tidak ditemukan</div>
 </div>
-<div class="version-tag">v3.0.0 Cloud-safe | Te.Co Pandawa POS</div>
+<div class="version-tag">v3.3.0 · Master Harga Bahan · Cloud-safe</div>
 </div>
 
 <button id="installPwaBtn" onclick="installPWA()">📲 Install Aplikasi</button>
@@ -553,8 +563,8 @@ body.pwa-mode .bottom-nav {
 </div>
 <div class="admin-card" onclick="openHppModal()">
 <div class="admin-icon">&#128200;</div>
-<div class="admin-title">Analisa HPP Produk</div>
-<div class="admin-desc">Harga bahan, pemakaian, dan margin per varian</div>
+<div class="admin-title">HPP & Harga Dasar Bahan</div>
+<div class="admin-desc">Harga beli, isi kemasan, biaya bahan, dan margin</div>
 </div>
 <div class="admin-card" onclick="openDeleteCashierModal()">
 <div class="admin-icon">🧹</div>
@@ -1153,11 +1163,23 @@ body.pwa-mode .bottom-nav {
 <div class="modal-overlay" id="modalHpp">
 <div class="modal" style="max-width:980px">
 <div class="modal-header">
-<h2>Analisa HPP Produk</h2>
+<h2>Analisa HPP & Harga Dasar Bahan</h2>
 <button class="modal-close" onclick="closeModal('modalHpp')">x</button>
 </div>
 <div class="modal-body">
-<div class="info-box">Fitur ini khusus admin untuk menghitung HPP per cup berdasarkan pemakaian bahan dan harga per satuan. Item tetap seperti es batu, plastik cup, dan sedotan dapat dihitung untuk setiap cup terjual, lalu ditambah bahan lain sesuai varian produk.</div>
+<div class="info-box">Fitur khusus Admin. Masukkan harga beli dan isi kemasan pada Master Harga Dasar Bahan. Sistem menghitung harga per ml/gr/pcs secara otomatis, lalu memakai nilai tersebut untuk HPP produk, rekap pemakaian bahan, laba, dan margin.</div>
+<div class="hpp-master-section">
+<div class="hpp-master-head">
+<div><h3>Master Harga Dasar Bahan</h3><p>Contoh: UHT Rp18.000 dengan isi 1.000 ml menghasilkan harga dasar Rp18/ml. Gunakan satuan yang sama dengan komposisi resep.</p></div>
+<div class="hpp-actions" style="margin-top:0"><button type="button" class="btn-secondary" onclick="addHppMaterialPriceRow()">+ Tambah Bahan</button><button type="button" class="btn-secondary" onclick="addDefaultHppMaterialPrices()">Tambah Daftar Default</button><button type="button" class="btn-primary" onclick="saveHppMaterialPrices()">Simpan Master Harga</button></div>
+</div>
+<div class="hpp-table-wrap hpp-master-scroll">
+<table class="hpp-table" style="min-width:900px">
+<thead><tr><th style="width:24%">Bahan</th><th style="width:15%">Harga Beli</th><th style="width:13%">Isi Kemasan</th><th style="width:12%">Satuan Dasar</th><th style="width:18%">Harga Dasar / Satuan</th><th style="width:11%">Status</th><th style="width:7%">Aksi</th></tr></thead>
+<tbody id="hppMaterialPriceBody"></tbody>
+</table>
+</div>
+</div>
 <div class="hpp-toolbar">
 <div class="cash-input-group">
 <label>Produk</label>
@@ -1188,7 +1210,7 @@ body.pwa-mode .bottom-nav {
 <th style="width:28%">Bahan</th>
 <th style="width:13%">Pemakaian / Cup</th>
 <th style="width:11%">Satuan</th>
-<th style="width:15%">Harga / Satuan</th>
+<th style="width:15%">Harga Dasar / Satuan</th>
 <th style="width:13%">Total Pakai</th>
 <th style="width:13%">Biaya / Cup</th>
 <th style="width:7%">Aksi</th>
@@ -1400,6 +1422,34 @@ const DEFAULT_HPP_FIXED_ITEMS = [
     {name:'Sedotan', usage:1, unit:'pcs', price:0}
 ];
 
+const DEFAULT_HPP_MATERIALS = [
+    {name:'Air', unit:'ml'},
+    {name:'Air Mineral', unit:'ml'},
+    {name:'Air Hangat', unit:'ml'},
+    {name:'Es Batu', unit:'gr'},
+    {name:'Cup + Tutup', unit:'pcs'},
+    {name:'Plastik Cup', unit:'pcs'},
+    {name:'Sedotan', unit:'pcs'},
+    {name:'UHT', unit:'ml'},
+    {name:'Kental Manis', unit:'ml'},
+    {name:'Krimer', unit:'gr'},
+    {name:'Robusta', unit:'gr'},
+    {name:'Gula Aren', unit:'ml'},
+    {name:'Fruktosa', unit:'ml'},
+    {name:'Konsentrat', unit:'ml'},
+    {name:'Matcha', unit:'gr'},
+    {name:'Bubuk Rasa', unit:'gr'},
+    {name:'Milo', unit:'gr'},
+    {name:'Sirup', unit:'ml'},
+    {name:'Sirup Vanilla', unit:'ml'},
+    {name:'Sirup Raspberry', unit:'ml'},
+    {name:'Sirup Lemon', unit:'ml'},
+    {name:'Sirup Leci', unit:'ml'},
+    {name:'Sirup Passion Fruit', unit:'ml'},
+    {name:'Sirup Pistachio', unit:'ml'},
+    {name:'Bahan Utama', unit:'porsi'}
+];
+
 
 // ==================== MULTI DEVICE SYNC CONFIG ====================
 // Isi konfigurasi ini dari Firebase Console agar data tersinkron di semua device.
@@ -1425,7 +1475,7 @@ let state = {
     transactions: [],
     expenses: [],
     stockNotes: [],
-    hppData: {version:2,recipes:{},deletedRecipes:{}},
+    hppData: {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}},
     menu: [],
     users: {},
     settings: {
@@ -1516,7 +1566,7 @@ function buildDataPayload() {
         transactions: state.transactions || [],
         expenses: state.expenses || [],
         stockNotes: state.stockNotes || [],
-        hppData: state.hppData || {version:2,recipes:{},deletedRecipes:{}},
+        hppData: state.hppData || {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}},
         menu: state.menu || [],
         users: state.users || {},
         settings: state.settings || {},
@@ -1530,7 +1580,7 @@ function applyDataPayload(data, refreshUI = true) {
     state.transactions = Array.isArray(data.transactions) ? data.transactions : [];
     state.expenses = Array.isArray(data.expenses) ? data.expenses : [];
     state.stockNotes = Array.isArray(data.stockNotes) ? data.stockNotes : [];
-    state.hppData = data.hppData && typeof data.hppData === 'object' ? data.hppData : {version:2,recipes:{},deletedRecipes:{}};
+    state.hppData = data.hppData && typeof data.hppData === 'object' ? data.hppData : {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}};
     ensureHppData();
     state.menu = Array.isArray(data.menu) ? data.menu : [];
     state.users = data.users && typeof data.users === 'object' ? data.users : {};
@@ -1620,7 +1670,7 @@ function refreshAfterDataUpdate() {
     if(document.getElementById('modalExpense')?.classList.contains('active')) renderExpenseList();
     if(document.getElementById('modalDeleteCashier')?.classList.contains('active')) previewDeleteCashierData();
     if(document.getElementById('modalStock')?.classList.contains('active')) renderStockList();
-    if(document.getElementById('modalHpp')?.classList.contains('active')) { renderHppSavedList(); updateHppSummary(); }
+    if(document.getElementById('modalHpp')?.classList.contains('active')) { renderHppMaterialPriceEditor(); renderHppSavedList(); renderHppEditor(); }
 }
 
 function setDefaultDateInputs() {
@@ -2428,6 +2478,12 @@ function loadReportData(type) {
     currentReportType = type;
     const chart = document.getElementById('salesChart');
     const summary = document.getElementById('reportSummary');
+    if(!chart || !summary) {
+        if(window.TecoNativeReports && typeof window.TecoNativeReports.refresh === 'function') {
+            window.TecoNativeReports.refresh();
+        }
+        return;
+    }
     const reportTxs = getVisibleTransactions();
     const reportExpenses = getVisibleExpenses();
 
@@ -2663,10 +2719,33 @@ function importData() {
 
 // ==================== HPP PRODUCT ANALYSIS ====================
 function ensureHppData() {
-    if(!state.hppData || typeof state.hppData !== 'object') state.hppData = {version:2,recipes:{},deletedRecipes:{}};
-    state.hppData.version = Math.max(2, Number(state.hppData.version) || 0);
+    if(!state.hppData || typeof state.hppData !== 'object') state.hppData = {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}};
+    state.hppData.version = Math.max(3, Number(state.hppData.version) || 0);
     if(!state.hppData.recipes || typeof state.hppData.recipes !== 'object') state.hppData.recipes = {};
     if(!state.hppData.deletedRecipes || typeof state.hppData.deletedRecipes !== 'object') state.hppData.deletedRecipes = {};
+    if(!state.hppData.materialPrices || typeof state.hppData.materialPrices !== 'object') state.hppData.materialPrices = {};
+    if(!state.hppData.deletedMaterialPrices || typeof state.hppData.deletedMaterialPrices !== 'object') state.hppData.deletedMaterialPrices = {};
+
+    const seedRecord = (name, unit, legacyPrice = 0) => {
+        const key = hppMaterialPriceKey(name, unit);
+        if(!key || state.hppData.materialPrices[key] || state.hppData.deletedMaterialPrices[key]) return;
+        const unitPrice = Number(legacyPrice) || 0;
+        state.hppData.materialPrices[key] = {
+            key,
+            name: String(name || '').trim(),
+            purchasePrice: unitPrice,
+            packageQty: 1,
+            baseUnit: hppNormalizeUnit(unit),
+            unitPrice,
+            updatedAt: '1970-01-01T00:00:00.000Z',
+            updatedBy: 'system-migration'
+        };
+    };
+
+    DEFAULT_HPP_MATERIALS.forEach(row => seedRecord(row.name, row.unit, 0));
+    Object.values(state.hppData.recipes || {}).forEach(recipe => {
+        (recipe.materials || []).forEach(row => seedRecord(row.name, row.unit, row.price));
+    });
 }
 
 function hppEscape(value) {
@@ -2687,20 +2766,66 @@ function hppNumber(value) {
     return Math.round(n * 100) / 100;
 }
 
-function hppKnownPrice(materialName) {
+function hppNormalizeUnit(unit) {
+    const raw = String(unit || 'unit').trim().toLowerCase();
+    if(['g','gram','grams','gr'].includes(raw)) return 'gr';
+    if(['ml','milliliter','mililiter'].includes(raw)) return 'ml';
+    if(['pc','pcs','piece','pieces','buah','set'].includes(raw)) return 'pcs';
+    if(['portion','porsi'].includes(raw)) return 'porsi';
+    return raw || 'unit';
+}
+
+function hppMaterialNameKey(name) {
+    return String(name || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[._/\\-]+/g, ' ')
+        .replace(/\s+/g, ' ');
+}
+
+function hppMaterialPriceKey(name, unit) {
+    const nameKey = hppMaterialNameKey(name);
+    if(!nameKey) return '';
+    return nameKey + '::' + hppNormalizeUnit(unit);
+}
+
+function hppGetMaterialPriceRecord(name, unit) {
     ensureHppData();
-    const target = String(materialName || '').trim().toLowerCase();
+    const key = hppMaterialPriceKey(name, unit);
+    const direct = state.hppData.materialPrices[key];
+    if(direct) return direct;
+    const targetName = hppMaterialNameKey(name);
+    const targetUnit = hppNormalizeUnit(unit);
+    return Object.values(state.hppData.materialPrices || {}).find(row =>
+        hppMaterialNameKey(row.name) === targetName && hppNormalizeUnit(row.baseUnit || row.unit) === targetUnit
+    ) || null;
+}
+
+function hppMaterialUnitPrice(name, unit, fallback = 0) {
+    const record = hppGetMaterialPriceRecord(name, unit);
+    if(record) {
+        const calculated = Number(record.unitPrice) || ((Number(record.purchasePrice) || 0) / Math.max(1, Number(record.packageQty) || 1));
+        if(calculated > 0) return calculated;
+    }
+    return Number(fallback) || 0;
+}
+
+function hppKnownPrice(materialName, unit = '') {
+    ensureHppData();
+    const record = hppGetMaterialPriceRecord(materialName, unit);
+    if(record) return hppMaterialUnitPrice(materialName, unit, 0);
+    const target = hppMaterialNameKey(materialName);
     if(!target) return 0;
     for(const recipe of Object.values(state.hppData.recipes || {})) {
         for(const row of (recipe.materials || [])) {
-            if(String(row.name || '').trim().toLowerCase() === target && Number(row.price) > 0) return Number(row.price);
+            if(hppMaterialNameKey(row.name) === target && (!unit || hppNormalizeUnit(row.unit) === hppNormalizeUnit(unit)) && Number(row.price) > 0) return Number(row.price);
         }
     }
     return 0;
 }
 
 function hppMaterial(name, usage, unit) {
-    return {name, usage:Number(usage) || 0, unit:unit || 'pcs', price:hppKnownPrice(name)};
+    return {name, usage:Number(usage) || 0, unit:unit || 'pcs', price:hppKnownPrice(name, unit)};
 }
 
 function defaultHppRowsForProduct(product, variant) {
@@ -2723,7 +2848,7 @@ function defaultHppRowsForProduct(product, variant) {
 
     DEFAULT_HPP_FIXED_ITEMS.forEach(row => {
         const usage = row.name === 'Es Batu' && String(variant) === 'Hangat' ? 0 : row.usage;
-        rows.push({name:row.name, usage, unit:row.unit, price:hppKnownPrice(row.name)});
+        rows.push({name:row.name, usage, unit:row.unit, price:hppKnownPrice(row.name, row.unit)});
     });
     return rows;
 }
@@ -2735,6 +2860,148 @@ function getSelectedHppProduct() {
 
 function getSelectedHppVariant() {
     return document.getElementById('hppVariantSelect')?.value || 'Dingin';
+}
+
+function hppMaterialPriceEntries() {
+    ensureHppData();
+    return Object.values(state.hppData.materialPrices || {}).sort((a,b) =>
+        String(a.name || '').localeCompare(String(b.name || ''), 'id') || String(a.baseUnit || '').localeCompare(String(b.baseUnit || ''), 'id')
+    );
+}
+
+function renderHppMaterialPriceRows(rows) {
+    const body = document.getElementById('hppMaterialPriceBody');
+    if(!body) return;
+    body.innerHTML = (rows || []).map(row => {
+        const packageQty = Math.max(0, Number(row.packageQty) || 0);
+        const purchasePrice = Math.max(0, Number(row.purchasePrice) || 0);
+        const unitPrice = packageQty > 0 ? purchasePrice / packageQty : 0;
+        return `
+            <tr class="hpp-price-row" data-original-key="${hppEscape(row.key || '')}">
+                <td><input data-price-field="name" value="${hppEscape(row.name || '')}" oninput="updateHppMaterialPricePreview(this.closest('tr'))" placeholder="Nama bahan"></td>
+                <td><input data-price-field="purchasePrice" type="number" min="0" step="1" value="${hppEscape(purchasePrice)}" oninput="updateHppMaterialPricePreview(this.closest('tr'))"></td>
+                <td><input data-price-field="packageQty" type="number" min="0.0001" step="0.01" value="${hppEscape(packageQty || 1)}" oninput="updateHppMaterialPricePreview(this.closest('tr'))"></td>
+                <td><input data-price-field="baseUnit" value="${hppEscape(hppNormalizeUnit(row.baseUnit || row.unit || 'ml'))}" oninput="updateHppMaterialPricePreview(this.closest('tr'))" placeholder="ml / gr / pcs"></td>
+                <td class="hpp-total-cell" data-unit-price>${hppMoney(unitPrice)} / ${hppEscape(hppNormalizeUnit(row.baseUnit || row.unit || 'unit'))}</td>
+                <td data-price-status><span class="hpp-price-badge ${unitPrice > 0 ? 'complete' : 'warning'}">${unitPrice > 0 ? 'Aktif' : 'Belum diisi'}</span></td>
+                <td><button type="button" class="hpp-mini-btn danger" onclick="removeHppMaterialPriceRow(this)">Hapus</button></td>
+            </tr>`;
+    }).join('');
+}
+
+function renderHppMaterialPriceEditor() {
+    renderHppMaterialPriceRows(hppMaterialPriceEntries());
+}
+
+function updateHppMaterialPricePreview(tr) {
+    if(!tr) return;
+    const purchasePrice = Number(tr.querySelector('[data-price-field="purchasePrice"]')?.value) || 0;
+    const packageQty = Number(tr.querySelector('[data-price-field="packageQty"]')?.value) || 0;
+    const unit = hppNormalizeUnit(tr.querySelector('[data-price-field="baseUnit"]')?.value || 'unit');
+    const unitPrice = packageQty > 0 ? purchasePrice / packageQty : 0;
+    const priceEl = tr.querySelector('[data-unit-price]');
+    const statusEl = tr.querySelector('[data-price-status]');
+    if(priceEl) priceEl.textContent = `${hppMoney(unitPrice)} / ${unit}`;
+    if(statusEl) statusEl.innerHTML = `<span class="hpp-price-badge ${unitPrice > 0 ? 'complete' : 'warning'}">${unitPrice > 0 ? 'Aktif' : 'Belum diisi'}</span>`;
+}
+
+function hppCollectMaterialPriceRows() {
+    return Array.from(document.querySelectorAll('#hppMaterialPriceBody .hpp-price-row')).map(tr => {
+        const name = tr.querySelector('[data-price-field="name"]')?.value.trim() || '';
+        const purchasePrice = Math.max(0, Number(tr.querySelector('[data-price-field="purchasePrice"]')?.value) || 0);
+        const packageQty = Math.max(0, Number(tr.querySelector('[data-price-field="packageQty"]')?.value) || 0);
+        const baseUnit = hppNormalizeUnit(tr.querySelector('[data-price-field="baseUnit"]')?.value || 'unit');
+        return {originalKey:tr.dataset.originalKey || '', name, purchasePrice, packageQty, baseUnit};
+    });
+}
+
+function addHppMaterialPriceRow() {
+    const rows = hppCollectMaterialPriceRows().map(row => ({...row, key:row.originalKey}));
+    rows.push({key:'', name:'', purchasePrice:0, packageQty:1, baseUnit:'ml'});
+    renderHppMaterialPriceRows(rows);
+    document.querySelector('#hppMaterialPriceBody .hpp-price-row:last-child [data-price-field="name"]')?.focus();
+}
+
+function addDefaultHppMaterialPrices() {
+    const rows = hppCollectMaterialPriceRows().map(row => ({...row, key:row.originalKey}));
+    const existing = new Set(rows.map(row => hppMaterialPriceKey(row.name, row.baseUnit)));
+    DEFAULT_HPP_MATERIALS.forEach(item => {
+        const key = hppMaterialPriceKey(item.name, item.unit);
+        if(!existing.has(key)) rows.push({key:'', name:item.name, purchasePrice:0, packageQty:1, baseUnit:item.unit});
+    });
+    renderHppMaterialPriceRows(rows);
+}
+
+function removeHppMaterialPriceRow(btn) {
+    btn.closest('tr')?.remove();
+}
+
+function saveHppMaterialPrices() {
+    if(!isAdminUser()) { showToast('Harga bahan hanya dapat diubah admin'); return; }
+    ensureHppData();
+    const rows = hppCollectMaterialPriceRows().filter(row => row.name);
+    if(!rows.length) { showToast('Tambahkan minimal satu harga bahan'); return; }
+    const duplicateCheck = new Set();
+    for(const row of rows) {
+        if(!(row.packageQty > 0)) { showToast(`Isi kemasan ${row.name} harus lebih dari 0`); return; }
+        const key = hppMaterialPriceKey(row.name, row.baseUnit);
+        if(duplicateCheck.has(key)) { showToast(`Bahan duplikat: ${row.name} (${row.baseUnit})`); return; }
+        duplicateCheck.add(key);
+    }
+
+    const now = new Date().toISOString();
+    const oldPrices = state.hppData.materialPrices || {};
+    const nextPrices = {};
+    const keptKeys = new Set();
+    rows.forEach(row => {
+        const key = hppMaterialPriceKey(row.name, row.baseUnit);
+        const old = oldPrices[row.originalKey] || oldPrices[key] || null;
+        const unitPrice = row.purchasePrice / row.packageQty;
+        const unchanged = old
+            && hppMaterialNameKey(old.name) === hppMaterialNameKey(row.name)
+            && hppNormalizeUnit(old.baseUnit || old.unit) === row.baseUnit
+            && Number(old.purchasePrice) === row.purchasePrice
+            && Number(old.packageQty) === row.packageQty;
+        nextPrices[key] = {
+            key,
+            name: row.name,
+            purchasePrice: row.purchasePrice,
+            packageQty: row.packageQty,
+            baseUnit: row.baseUnit,
+            unitPrice,
+            updatedAt: unchanged ? (old.updatedAt || now) : now,
+            updatedBy: unchanged ? (old.updatedBy || 'admin') : (state.currentUser ? state.currentUser.id : 'admin')
+        };
+        keptKeys.add(key);
+        delete state.hppData.deletedMaterialPrices[key];
+        if(row.originalKey && row.originalKey !== key) state.hppData.deletedMaterialPrices[row.originalKey] = now;
+    });
+
+    Object.keys(oldPrices).forEach(key => {
+        if(!keptKeys.has(key)) state.hppData.deletedMaterialPrices[key] = now;
+    });
+    state.hppData.materialPrices = nextPrices;
+
+    Object.values(state.hppData.recipes || {}).forEach(recipe => {
+        let changed = false;
+        (recipe.materials || []).forEach(material => {
+            const resolved = hppMaterialUnitPrice(material.name, material.unit, 0);
+            if(Number(material.price) !== resolved) {
+                material.price = resolved;
+                changed = true;
+            }
+        });
+        if(changed) {
+            recipe.updatedAt = now;
+            recipe.updatedBy = state.currentUser ? state.currentUser.id : 'admin';
+        }
+    });
+
+    saveData();
+    renderHppMaterialPriceEditor();
+    renderHppEditor();
+    renderHppSavedList();
+    showToast('Master harga bahan disimpan dan HPP diperbarui otomatis');
 }
 
 function openHppModal() {
@@ -2749,6 +3016,7 @@ function openHppModal() {
     const end = document.getElementById('hppEndDate');
     if(start && !start.value) start.value = today;
     if(end && !end.value) end.value = today;
+    renderHppMaterialPriceEditor();
     renderHppEditor();
     renderHppSavedList();
     openModal('modalHpp');
@@ -2769,17 +3037,35 @@ function renderHppEditor() {
 function renderHppRows(rows) {
     const body = document.getElementById('hppRowsBody');
     if(!body) return;
-    body.innerHTML = (rows || []).map(row => `
+    body.innerHTML = (rows || []).map(row => {
+        const price = hppMaterialUnitPrice(row.name, row.unit, row.price);
+        const hasMaster = !!hppGetMaterialPriceRecord(row.name, row.unit) && price > 0;
+        return `
         <tr class="hpp-material-row">
-            <td><input data-field="name" value="${hppEscape(row.name || '')}" oninput="updateHppSummary()" placeholder="Nama bahan"></td>
+            <td><input data-field="name" value="${hppEscape(row.name || '')}" oninput="refreshHppRowPrice(this.closest('tr'));updateHppSummary()" placeholder="Nama bahan"></td>
             <td><input data-field="usage" type="number" min="0" step="0.01" value="${hppEscape(row.usage ?? 0)}" oninput="updateHppSummary()"></td>
-            <td><input data-field="unit" value="${hppEscape(row.unit || 'pcs')}" oninput="updateHppSummary()"></td>
-            <td><input data-field="price" type="number" min="0" step="0.01" value="${hppEscape(row.price ?? 0)}" oninput="updateHppSummary()"></td>
+            <td><input data-field="unit" value="${hppEscape(hppNormalizeUnit(row.unit || 'pcs'))}" oninput="refreshHppRowPrice(this.closest('tr'));updateHppSummary()"></td>
+            <td><input data-field="price" type="number" value="${hppEscape(price)}" readonly><small data-price-source class="hpp-price-source ${hasMaster ? 'complete' : 'warning'}">${hasMaster ? 'Master harga' : 'Harga belum diisi'}</small></td>
             <td class="hpp-total-cell" data-total-usage>-</td>
             <td class="hpp-total-cell" data-row-cost>Rp 0</td>
             <td><button type="button" class="hpp-mini-btn danger" onclick="removeHppRow(this)">Hapus</button></td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
+}
+
+function refreshHppRowPrice(tr) {
+    if(!tr) return;
+    const name = tr.querySelector('[data-field="name"]')?.value.trim() || '';
+    const unit = hppNormalizeUnit(tr.querySelector('[data-field="unit"]')?.value || 'unit');
+    const price = hppMaterialUnitPrice(name, unit, 0);
+    const priceInput = tr.querySelector('[data-field="price"]');
+    const source = tr.querySelector('[data-price-source]');
+    const hasMaster = !!hppGetMaterialPriceRecord(name, unit) && price > 0;
+    if(priceInput) priceInput.value = price;
+    if(source) {
+        source.textContent = hasMaster ? 'Master harga' : 'Harga belum diisi';
+        source.className = `hpp-price-source ${hasMaster ? 'complete' : 'warning'}`;
+    }
 }
 
 function hppCollectRows() {
@@ -2787,8 +3073,8 @@ function hppCollectRows() {
     document.querySelectorAll('#hppRowsBody .hpp-material-row').forEach(tr => {
         const name = tr.querySelector('[data-field="name"]')?.value.trim() || '';
         const usage = Number(tr.querySelector('[data-field="usage"]')?.value) || 0;
-        const unit = tr.querySelector('[data-field="unit"]')?.value.trim() || 'pcs';
-        const price = Number(tr.querySelector('[data-field="price"]')?.value) || 0;
+        const unit = hppNormalizeUnit(tr.querySelector('[data-field="unit"]')?.value.trim() || 'pcs');
+        const price = hppMaterialUnitPrice(name, unit, Number(tr.querySelector('[data-field="price"]')?.value) || 0);
         if(name) rows.push({name, usage, unit, price});
     });
     return rows;
@@ -2842,16 +3128,22 @@ function updateHppSummary() {
     const product = getSelectedHppProduct();
     if(!product) return;
     const variant = getSelectedHppVariant();
-    const rows = hppCollectRows();
     const sales = hppSalesSummary(product, variant);
     let hppPerCup = 0;
-    document.querySelectorAll('#hppRowsBody .hpp-material-row').forEach((tr, index) => {
-        const row = rows[index] || {usage:0, unit:'', price:0};
-        const rowCost = (Number(row.usage) || 0) * (Number(row.price) || 0);
+    let materialCount = 0;
+    let missingPrices = 0;
+    document.querySelectorAll('#hppRowsBody .hpp-material-row').forEach(tr => {
+        const name = tr.querySelector('[data-field="name"]')?.value.trim() || '';
+        const usage = Number(tr.querySelector('[data-field="usage"]')?.value) || 0;
+        const unit = hppNormalizeUnit(tr.querySelector('[data-field="unit"]')?.value || 'unit');
+        const price = hppMaterialUnitPrice(name, unit, 0);
+        const rowCost = usage * price;
+        if(name) materialCount += 1;
+        if(name && usage > 0 && !(price > 0)) missingPrices += 1;
         hppPerCup += rowCost;
         const totalUsageEl = tr.querySelector('[data-total-usage]');
         const rowCostEl = tr.querySelector('[data-row-cost]');
-        if(totalUsageEl) totalUsageEl.textContent = hppNumber((Number(row.usage) || 0) * sales.qty) + ' ' + (row.unit || '');
+        if(totalUsageEl) totalUsageEl.textContent = hppNumber(usage * sales.qty) + ' ' + unit;
         if(rowCostEl) rowCostEl.textContent = hppMoney(rowCost);
     });
     const sellingPrice = Number(product.price) || 0;
@@ -2868,7 +3160,7 @@ function updateHppSummary() {
         <div class="hpp-summary-card"><span>Omzet Produk Periode</span><strong>${hppMoney(sales.revenue)}</strong></div>
         <div class="hpp-summary-card"><span>Total HPP Periode</span><strong>${hppMoney(totalHpp)}</strong></div>
         <div class="hpp-summary-card"><span>Estimasi Margin Periode</span><strong>${hppMoney(totalMargin)}</strong></div>
-        <div class="hpp-summary-card"><span>Jumlah Item Bahan</span><strong>${rows.length}</strong></div>
+        <div class="hpp-summary-card"><span>Status Harga Bahan</span><strong>${missingPrices ? missingPrices + ' belum diisi' : materialCount + ' lengkap'}</strong></div>
     `;
 }
 
@@ -2880,6 +3172,22 @@ function saveHppRecipe() {
     const variant = getSelectedHppVariant();
     const materials = hppCollectRows();
     if(!materials.length) { showToast('Tambahkan minimal satu bahan'); return; }
+    const now = new Date().toISOString();
+    materials.forEach(material => {
+        const key = hppMaterialPriceKey(material.name, material.unit);
+        if(!state.hppData.materialPrices[key] && !state.hppData.deletedMaterialPrices[key]) {
+            state.hppData.materialPrices[key] = {
+                key,
+                name:material.name,
+                purchasePrice:0,
+                packageQty:1,
+                baseUnit:material.unit,
+                unitPrice:0,
+                updatedAt:now,
+                updatedBy:state.currentUser ? state.currentUser.id : 'admin'
+            };
+        }
+    });
     const key = hppKey(product.id, variant);
     delete state.hppData.deletedRecipes[key];
     state.hppData.recipes[key] = {
@@ -2888,18 +3196,20 @@ function saveHppRecipe() {
         productName: product.name,
         variant,
         sellingPrice: Number(product.price) || 0,
-        materials,
-        updatedAt: new Date().toISOString(),
+        materials: materials.map(row => ({...row, price:hppMaterialUnitPrice(row.name, row.unit, row.price)})),
+        updatedAt: now,
         updatedBy: state.currentUser ? state.currentUser.id : 'admin'
     };
     saveData();
+    renderHppMaterialPriceEditor();
     renderHppSavedList();
     updateHppSummary();
-    showToast('HPP produk disimpan');
+    const missing = materials.filter(row => row.usage > 0 && !(hppMaterialUnitPrice(row.name, row.unit, 0) > 0)).length;
+    showToast(missing ? `HPP disimpan; ${missing} harga bahan belum diisi` : 'HPP produk disimpan');
 }
 
 function hppCostOfMaterials(materials) {
-    return (materials || []).reduce((sum, row) => sum + ((Number(row.usage) || 0) * (Number(row.price) || 0)), 0);
+    return (materials || []).reduce((sum, row) => sum + ((Number(row.usage) || 0) * hppMaterialUnitPrice(row.name, row.unit, row.price)), 0);
 }
 
 function renderHppSavedList() {
@@ -2916,11 +3226,12 @@ function renderHppSavedList() {
         const price = Number(recipe.sellingPrice) || 0;
         const margin = price - cost;
         const pct = price > 0 ? Math.round((margin / price) * 1000) / 10 : 0;
+        const missing = (recipe.materials || []).filter(row => Number(row.usage) > 0 && !(hppMaterialUnitPrice(row.name, row.unit, row.price) > 0)).length;
         return `
             <div class="hpp-saved-item">
                 <div>
                     <div class="hpp-saved-title">${hppEscape(recipe.productName)} (${hppEscape(recipe.variant)})</div>
-                    <div class="hpp-saved-meta">HPP ${hppMoney(cost)} / cup - Margin ${hppMoney(margin)} (${pct}%) - ${recipe.materials?.length || 0} bahan</div>
+                    <div class="hpp-saved-meta">HPP ${hppMoney(cost)} / cup - Margin ${hppMoney(margin)} (${pct}%) - ${recipe.materials?.length || 0} bahan${missing ? ` - ${missing} harga belum diisi` : ''}</div>
                 </div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
                     <button type="button" class="hpp-mini-btn" onclick="loadHppRecipeByKey('${hppEscape(recipe.key)}')">Buka</button>
@@ -2957,28 +3268,30 @@ function deleteHppRecipe(key) {
 }
 
 function exportHppCsv() {
+    if(!isAdminUser()) { showToast('Export HPP hanya untuk admin'); return; }
     ensureHppData();
     const entries = Object.values(state.hppData.recipes || {});
     if(!entries.length) { showToast('Belum ada data HPP'); return; }
-    let csv = 'Produk,Varian,Harga_Jual,HPP_Per_Cup,Margin_Per_Cup,Margin_Persen,Bahan,Pemakaian_Per_Cup,Satuan,Harga_Per_Satuan,Biaya_Per_Cup\n';
+    let csv = 'Produk,Varian,Harga_Jual,HPP_Per_Cup,Margin_Per_Cup,Margin_Persen,Bahan,Pemakaian_Per_Cup,Satuan,Harga_Beli_Master,Isi_Kemasan,Harga_Dasar_Per_Satuan,Biaya_Per_Cup,Status_Harga\n';
     entries.forEach(recipe => {
         const cost = hppCostOfMaterials(recipe.materials);
         const price = Number(recipe.sellingPrice) || 0;
         const margin = price - cost;
         const pct = price > 0 ? Math.round((margin / price) * 1000) / 10 : 0;
         (recipe.materials || []).forEach(row => {
-            const rowCost = (Number(row.usage) || 0) * (Number(row.price) || 0);
-            csv += [recipe.productName, recipe.variant, price, Math.round(cost), Math.round(margin), pct, row.name, row.usage, row.unit, row.price, Math.round(rowCost)].map(escapeCsv).join(',') + '\n';
+            const master = hppGetMaterialPriceRecord(row.name, row.unit) || {};
+            const unitPrice = hppMaterialUnitPrice(row.name, row.unit, row.price);
+            const rowCost = (Number(row.usage) || 0) * unitPrice;
+            csv += [recipe.productName, recipe.variant, price, Math.round(cost), Math.round(margin), pct, row.name, row.usage, row.unit, master.purchasePrice || 0, master.packageQty || 0, unitPrice, Math.round(rowCost), unitPrice > 0 ? 'Lengkap' : 'Belum diisi'].map(escapeCsv).join(',') + '\n';
         });
     });
     const blob = new Blob([csv], {type:'text/csv'});
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'hpp_produk_teco_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.download = 'hpp_dan_harga_bahan_teco_' + new Date().toISOString().slice(0,10) + '.csv';
     link.click();
-    showToast('CSV HPP berhasil dibuat');
+    showToast('CSV HPP dan harga bahan berhasil dibuat');
 }
-
 
 function openExpenseModal() {
     if(!state.currentUser) { showToast('Login terlebih dahulu'); return; }
@@ -3423,464 +3736,12 @@ document.addEventListener('DOMContentLoaded', init);
 <!-- Te.Co Sakala + live analytics v2.1.0 -->
 
 <!-- Te.Co Sakala + live analytics v2.1.0 -->
-<!-- TECO_NATIVE_REPORT_V310_START -->
-<style id="teco-native-main-style">
-#teco-native-report {
-  margin: 12px 0 20px;
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 16px;
-  background: #fff;
-  color: #111827;
-  font-family: inherit;
-}
-#teco-native-report * { box-sizing: border-box; }
-.teco-native-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  margin-bottom: 14px;
-}
-.teco-native-head h3 { margin: 0; font-size: 20px; }
-.teco-native-head p {
-  margin: 5px 0 0;
-  color: #6b7280;
-  font-size: 12px;
-  line-height: 1.45;
-}
-.teco-native-status {
-  padding: 7px 10px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.teco-native-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: flex-end;
-  padding: 12px;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-}
-.teco-native-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #4b5563;
-  font-size: 11px;
-  font-weight: 700;
-}
-.teco-native-controls input,
-.teco-native-controls select,
-.teco-native-controls button {
-  min-height: 38px;
-  padding: 8px 11px;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  background: #fff;
-  color: #111827;
-  font: inherit;
-}
-.teco-native-controls button {
-  border-color: #15803d;
-  background: #15803d;
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-}
-.teco-native-controls button.secondary {
-  border-color: #cbd5e1;
-  background: #e2e8f0;
-  color: #1f2937;
-}
-.teco-native-tabs {
-  display: flex;
-  gap: 5px;
-}
-.teco-native-tabs button {
-  border-color: #cbd5e1;
-  background: #fff;
-  color: #334155;
-}
-.teco-native-tabs button.active {
-  border-color: #0f766e;
-  background: #0f766e;
-  color: #fff;
-}
-.teco-native-controls .hidden { display: none; }
-.teco-native-info {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 4px;
-  color: #475569;
-  font-size: 11px;
-}
-.teco-native-cards {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 9px;
-  margin: 8px 0 12px;
-}
-.teco-native-cards article {
-  padding: 13px;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
-}
-.teco-native-cards span {
-  display: block;
-  color: #64748b;
-  font-size: 11px;
-}
-.teco-native-cards strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 19px;
-}
-.teco-native-profit-summary {
-  margin: 8px 0 12px;
-  overflow: hidden;
-  border: 1px solid #a7f3d0;
-  border-radius: 14px;
-  background: #ecfdf5;
-}
-.teco-native-profit-title {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 14px;
-  border-bottom: 1px solid #a7f3d0;
-}
-.teco-native-profit-title h4 { margin: 0; font-size: 14px; }
-.teco-native-profit-title p {
-  margin: 4px 0 0;
-  color: #047857;
-  font-size: 11px;
-}
-.teco-native-profit-cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
-  gap: 9px;
-  padding: 12px;
-}
-.teco-native-profit-cards article {
-  padding: 12px;
-  border: 1px solid #d1fae5;
-  border-radius: 11px;
-  background: #fff;
-}
-.teco-native-profit-cards span {
-  display: block;
-  color: #64748b;
-  font-size: 11px;
-}
-.teco-native-profit-cards strong {
-  display: block;
-  margin-top: 5px;
-  font-size: 17px;
-}
-.teco-native-hpp-status {
-  display: inline-block;
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  color: #334155;
-  font-size: 10px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.teco-native-hpp-status.complete { background: #dcfce7; color: #166534; }
-.teco-native-hpp-status.warning { background: #fef3c7; color: #92400e; }
-.teco-native-hpp-status.missing { background: #fee2e2; color: #991b1b; }
-.teco-native-warning {
-  margin: 8px 0 12px;
-  padding: 10px 12px;
-  border: 1px solid #fde68a;
-  border-radius: 10px;
-  background: #fffbeb;
-  color: #92400e;
-  font-size: 12px;
-}
-.teco-native-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 12px;
-}
-.teco-native-panel {
-  overflow: hidden;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  background: #fff;
-}
-.teco-native-panel h4 {
-  margin: 0;
-  padding: 11px 13px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8fafc;
-  font-size: 13px;
-}
-.teco-native-transactions { margin-top: 12px; }
-.teco-native-hpp-materials { margin-top: 12px; }
-.teco-native-panel-note {
-  padding: 8px 12px;
-  color: #047857;
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.teco-native-table-wrap {
-  width: 100%;
-  overflow-x: auto;
-}
-.teco-native-panel table {
-  width: 100%;
-  min-width: 520px;
-  border-collapse: collapse;
-}
-.teco-native-panel th,
-.teco-native-panel td {
-  padding: 9px 10px;
-  border-bottom: 1px solid #e5e7eb;
-  text-align: left;
-  vertical-align: top;
-  font-size: 11px;
-}
-.teco-native-panel th {
-  background: #f1f5f9;
-  color: #334155;
-  font-weight: 800;
-}
-.teco-native-number {
-  text-align: right !important;
-  white-space: nowrap;
-}
-.teco-native-empty {
-  padding: 22px !important;
-  text-align: center !important;
-  color: #64748b;
-}
-body.dark-mode #teco-native-report,
-body.dark #teco-native-report {
-  border-color: #334155;
-  background: #111827;
-  color: #f8fafc;
-}
-body.dark-mode .teco-native-panel,
-body.dark .teco-native-panel,
-body.dark-mode .teco-native-cards article,
-body.dark .teco-native-cards article,
-body.dark-mode .teco-native-profit-cards article,
-body.dark .teco-native-profit-cards article {
-  border-color: #334155;
-  background: #1f2937;
-}
-body.dark-mode .teco-native-profit-summary,
-body.dark .teco-native-profit-summary {
-  border-color: #065f46;
-  background: #022c22;
-}
-body.dark-mode .teco-native-profit-title,
-body.dark .teco-native-profit-title {
-  border-color: #065f46;
-}
-body.dark-mode .teco-native-panel h4,
-body.dark .teco-native-panel h4,
-body.dark-mode .teco-native-panel th,
-body.dark .teco-native-panel th,
-body.dark-mode .teco-native-controls,
-body.dark .teco-native-controls {
-  border-color: #334155;
-  background: #0f172a;
-  color: #e2e8f0;
-}
-@media (max-width: 850px) {
-  .teco-native-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
-  .teco-native-profit-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
-  .teco-native-grid { grid-template-columns: 1fr; }
-  .teco-native-head { flex-direction: column; }
-  .teco-native-profit-title { flex-direction: column; }
-  .teco-native-status { white-space: normal; }
-}
-
-.teco-native-controls button.whatsapp {
-  border-color: #16a34a;
-  background: #16a34a;
-}
-.teco-native-controls button.combined {
-  border-color: #0f766e;
-  background: #0f766e;
-}
-@media (max-width: 1050px) {
-  .teco-native-cards { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
-}
-
-
-.teco-native-controls button.admin-edit {
-  border-color: #7c3aed;
-  background: #7c3aed;
-}
-.teco-native-adjustments { margin-top: 12px; }
-.teco-native-panel-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8fafc;
-}
-.teco-native-panel-title h4 { border: 0; background: transparent; }
-.teco-native-mini {
-  margin: 6px;
-  padding: 6px 9px;
-  border: 0;
-  border-radius: 7px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.teco-native-mini.danger { background: #dc2626; }
-.teco-native-modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 100000;
-  overflow: auto;
-  padding: 18px;
-  background: rgba(15, 23, 42, .7);
-}
-.teco-native-modal.active { display: block; }
-.teco-native-modal-card {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 16px;
-  border-radius: 16px;
-  background: #fff;
-  color: #111827;
-  box-shadow: 0 24px 60px rgba(0,0,0,.35);
-}
-.teco-native-modal-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
-}
-.teco-native-modal-head h3 { margin: 0; }
-.teco-native-modal-head p { margin: 5px 0 0; color: #64748b; font-size: 12px; }
-.teco-native-modal-head > button {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 9px;
-  background: #dc2626;
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-}
-.teco-native-admin-tabs {
-  display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin: 12px 0;
-}
-.teco-native-admin-tabs button,
-.teco-native-editor-toolbar button,
-.teco-native-form-actions button {
-  min-height: 38px;
-  padding: 8px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  background: #fff;
-  color: #334155;
-  font-weight: 800;
-  cursor: pointer;
-}
-.teco-native-admin-tabs button.active,
-.teco-native-form-actions button:not(.secondary) {
-  border-color: #0f766e;
-  background: #0f766e;
-  color: #fff;
-}
-.teco-native-admin-section.hidden { display: none; }
-.teco-native-help { color: #64748b; font-size: 12px; }
-.teco-native-admin-section input,
-.teco-native-admin-section select,
-.teco-native-admin-section textarea {
-  width: 100%;
-  min-height: 36px;
-  padding: 7px 9px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #111827;
-  font: inherit;
-}
-.teco-native-editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  align-items: end;
-  margin-bottom: 10px;
-}
-.teco-native-editor-toolbar label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 700;
-}
-.teco-native-form-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-.teco-native-adjustment-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.teco-native-adjustment-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #475569;
-  font-size: 11px;
-  font-weight: 700;
-}
-.teco-native-adjustment-form .wide { grid-column: 1 / -1; }
-body.dark-mode .teco-native-modal-card,
-body.dark .teco-native-modal-card {
-  background: #111827;
-  color: #f8fafc;
-}
-@media (max-width: 760px) {
-  .teco-native-modal { padding: 6px; }
-  .teco-native-modal-card { padding: 10px; border-radius: 10px; }
-  .teco-native-adjustment-form { grid-template-columns: 1fr; }
-  .teco-native-adjustment-form .wide { grid-column: auto; }
-}
-
-</style>
-<script id="teco-native-main-script">
+<!-- TECO_NATIVE_REPORT_V330_START -->
+<script>
 (function () {
   'use strict';
 
-  const VERSION = '3.1.0';
+  const VERSION = '3.3.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = {"version":"1.1.0","source":"HPP_Resep_Bahan_Penggunaan.xlsx","timezone":"Asia/Jakarta","concentrateBatchYieldMl":1000,"notes":["Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.","Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren.","Nama resep KOPI MILO dinormalisasi menjadi COFFEE MILO agar sesuai dengan nama menu.","MILO MALAYSIA memakai resep Milo original tanpa sirup rasa."],"recipes":{"KONSENTRAT":[{"material":"Kental Manis","qty":200.0,"unit":"ml"},{"material":"Krimer","qty":100.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":100.0,"unit":"ml"},{"material":"Robusta","qty":45.0,"unit":"gr"},{"material":"Air","qty":800.0,"unit":"ml"}],"RENJANA":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"SAKALA":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"KAHWA":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":5.0,"unit":"ml"},{"material":"Fruktosa","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"AMERICANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"PREMIUM SERIES (BUTTERSCOTCH, CARAMEL, HAZELNUT)":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)":[{"material":"Kental Manis","qty":20.0,"unit":"ml"},{"material":"Bubuk Rasa","qty":20.0,"unit":"gr"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHAPRESSO":[{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Krimer","qty":15.0,"unit":"gr"},{"material":"Bubuk Rasa","qty":18.0,"unit":"gr"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHA AREN":[{"material":"Gula Aren","qty":15.0,"unit":"ml"},{"material":"Matcha","qty":18.0,"unit":"gr"},{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Air Hangat","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO BUTTERSCOTCH, CARAMEL, HAZELNUT":[{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"REDBERRYCANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Lemon","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"GOLDEN DRIFT":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Leci","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"LUMA PEARL":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Passion Fruit","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"KOPSU PISTACHIO":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"Sirup Pistachio","qty":15.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"COFFEE MILO":[{"material":"Kental Manis","qty":10.0,"unit":"ml"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO MALAYSIA":[{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}]}};
@@ -4891,9 +4752,95 @@ body.dark .teco-native-modal-card {
     return known ? canonical(known[1]) : 'Tanpa varian';
   }
 
+  function normalizeHppUnit(unit) {
+    const raw = canonical(unit || 'unit').toLowerCase();
+    if (['g', 'gram', 'grams', 'gr'].includes(raw)) return 'gr';
+    if (['ml', 'milliliter', 'mililiter'].includes(raw)) return 'ml';
+    if (['pc', 'pcs', 'piece', 'pieces', 'buah', 'set'].includes(raw)) return 'pcs';
+    if (['portion', 'porsi'].includes(raw)) return 'porsi';
+    return raw || 'unit';
+  }
+
+  function hppMaterialNameKey(name) {
+    return canonical(name)
+      .toLowerCase()
+      .replace(/[._/\\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function hppMaterialPriceKey(name, unit) {
+    const nameKey = hppMaterialNameKey(name);
+    return nameKey ? `${nameKey}::${normalizeHppUnit(unit)}` : '';
+  }
+
+  function normalizeHppMaterialPrices(root) {
+    const raw = parseMaybeJson(root && root.hppData) || {};
+    const source = raw.materialPrices && typeof raw.materialPrices === 'object'
+      ? raw.materialPrices
+      : {};
+    const prices = new Map();
+
+    Object.entries(source).forEach(([storageKey, value]) => {
+      const row = parseMaybeJson(value);
+      if (!row || typeof row !== 'object') return;
+      const name = canonical(first(row, ['name', 'material', 'bahan', 'nama']));
+      const baseUnit = normalizeHppUnit(first(row, ['baseUnit', 'unit', 'satuan']) || 'unit');
+      const purchasePrice = toNumber(first(row, ['purchasePrice', 'hargaBeli', 'harga_beli', 'price']));
+      const packageQty = toNumber(first(row, ['packageQty', 'isiKemasan', 'isi_kemasan', 'qty', 'quantity'])) || 1;
+      const storedUnitPrice = toNumber(first(row, ['unitPrice', 'hargaDasar', 'harga_dasar', 'pricePerUnit']));
+      const unitPrice = storedUnitPrice > 0 ? storedUnitPrice : (purchasePrice > 0 && packageQty > 0 ? purchasePrice / packageQty : 0);
+      if (!name) return;
+      const key = hppMaterialPriceKey(name, baseUnit) || canonical(storageKey);
+      prices.set(key, {
+        key,
+        name,
+        baseUnit,
+        purchasePrice,
+        packageQty,
+        unitPrice,
+        updatedAt: canonical(first(row, ['updatedAt', 'updated_at'])),
+        updatedBy: canonical(first(row, ['updatedBy', 'updated_by']))
+      });
+    });
+
+    // Kompatibilitas data HPP v2: harga pada baris resep menjadi fallback
+    const recipeSource = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    Object.values(recipeSource).forEach((recipeValue) => {
+      const recipe = parseMaybeJson(recipeValue);
+      if (!recipe || typeof recipe !== 'object') return;
+      asArray(first(recipe, ['materials', 'bahan', 'ingredients'])).forEach((materialValue) => {
+        const material = parseMaybeJson(materialValue);
+        if (!material || typeof material !== 'object') return;
+        const name = canonical(first(material, ['name', 'material', 'bahan', 'ingredient', 'nama']));
+        const baseUnit = normalizeHppUnit(first(material, ['unit', 'satuan']) || 'unit');
+        const legacyPrice = toNumber(first(material, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+        const key = hppMaterialPriceKey(name, baseUnit);
+        if (!name || !key || prices.has(key)) return;
+        prices.set(key, {
+          key,
+          name,
+          baseUnit,
+          purchasePrice: legacyPrice,
+          packageQty: 1,
+          unitPrice: legacyPrice,
+          updatedAt: canonical(first(recipe, ['updatedAt', 'updated_at'])),
+          updatedBy: 'legacy-recipe'
+        });
+      });
+    });
+
+    return prices;
+  }
+
+  function findHppMaterialPrice(priceMap, name, unit) {
+    return priceMap.get(hppMaterialPriceKey(name, unit)) || null;
+  }
+
   function normalizeHppData(root) {
     const raw = parseMaybeJson(root && root.hppData) || {};
     const source = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    const priceMap = normalizeHppMaterialPrices(root);
     const recipes = [];
 
     Object.entries(source).forEach(([storageKey, recipe]) => {
@@ -4911,10 +4858,20 @@ body.dark .teco-native-modal-card {
           if (!row || typeof row !== 'object') return null;
           const name = canonical(first(row, ['name', 'material', 'bahan', 'ingredient', 'nama']));
           const usage = toNumber(first(row, ['usage', 'qty', 'quantity', 'jumlah', 'amount', 'takaran']));
-          const unit = canonical(first(row, ['unit', 'satuan']) || 'unit');
-          const price = toNumber(first(row, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+          const unit = normalizeHppUnit(first(row, ['unit', 'satuan']) || 'unit');
+          const legacyPrice = toNumber(first(row, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+          const master = findHppMaterialPrice(priceMap, name, unit);
+          const price = master ? toNumber(master.unitPrice) : legacyPrice;
           if (!name || usage < 0) return null;
-          return { name, usage, unit, price };
+          return {
+            name,
+            usage,
+            unit,
+            price,
+            purchasePrice: master ? master.purchasePrice : legacyPrice,
+            packageQty: master ? master.packageQty : 1,
+            priceSource: master ? 'Master harga' : (legacyPrice > 0 ? 'Harga resep lama' : 'Belum diisi')
+          };
         })
         .filter(Boolean);
 
@@ -5041,22 +4998,24 @@ body.dark .teco-native-modal-card {
       .sort((a, b) => b.qty - a.qty);
   }
 
-  function aggregateMaterials(products) {
+  function aggregateMaterials(products, root) {
     const materials = new Map();
     const unmapped = [];
     const concentrateRecipe = runtimeRecipeData.recipes.KONSENTRAT || [];
     const concentrateYield = runtimeRecipeData.concentrateYield || 1000;
+    const priceMap = normalizeHppMaterialPrices(root);
     let concentrateMl = 0;
 
     function addMaterial(material, qty, unit, productName, kind) {
       const name = canonical(material);
-      const key = `${keyText(name)}::${keyText(unit)}`;
+      const normalizedUnit = normalizeHppUnit(unit || 'unit');
+      const key = `${keyText(name)}::${keyText(normalizedUnit)}`;
 
       if (!materials.has(key)) {
         materials.set(key, {
           material: name,
           qty: 0,
-          unit: canonical(unit || 'unit'),
+          unit: normalizedUnit,
           kind: kind || 'Bahan baku',
           products: new Set()
         });
@@ -5118,16 +5077,34 @@ body.dark .teco-native-modal-card {
       }
     });
 
-    return {
-      rows: Array.from(materials.values())
-        .map((row) => ({
+    const rows = Array.from(materials.values())
+      .map((row) => {
+        const master = findHppMaterialPrice(priceMap, row.material, row.unit);
+        const unitPrice = master ? toNumber(master.unitPrice) : 0;
+        const totalCost = toNumber(row.qty) * unitPrice;
+        return {
           material: row.material,
           qty: row.qty,
           unit: row.unit,
           kind: row.kind,
-          products: Array.from(row.products).sort()
-        }))
-        .sort((a, b) => a.material.localeCompare(b.material, 'id')),
+          products: Array.from(row.products).sort(),
+          purchasePrice: master ? master.purchasePrice : 0,
+          packageQty: master ? master.packageQty : 0,
+          unitPrice,
+          totalCost,
+          hasMissingPrice: toNumber(row.qty) > 0 && !(unitPrice > 0)
+        };
+      })
+      .sort((a, b) => a.material.localeCompare(b.material, 'id'));
+
+    const activeMasterPrices = Array.from(priceMap.values()).filter((row) => toNumber(row.unitPrice) > 0).length;
+    return {
+      rows,
+      totalCost: rows.reduce((sum, row) => sum + toNumber(row.totalCost), 0),
+      pricedMaterials: rows.filter((row) => !row.hasMissingPrice).length,
+      missingMaterials: rows.filter((row) => row.hasMissingPrice).map((row) => row.material),
+      masterPriceCount: priceMap.size,
+      activeMasterPrices,
       concentrateMl,
       concentrateBatches: concentrateYield > 0 ? concentrateMl / concentrateYield : 0,
       concentrateYield,
@@ -5524,9 +5501,9 @@ body.dark .teco-native-modal-card {
     }).join('');
   }
 
-  function materialRows(materials) {
+  function materialRows(materials, includeCosts) {
     if (!materials.length) {
-      return '<tr><td colspan="5" class="teco-native-empty">Belum ada bahan terpakai pada periode ini.</td></tr>';
+      return `<tr><td colspan="${includeCosts ? 8 : 5}" class="teco-native-empty">Belum ada bahan terpakai pada periode ini.</td></tr>`;
     }
 
     return materials.map((material, index) => `
@@ -5535,6 +5512,11 @@ body.dark .teco-native-modal-card {
         <td>${escapeHtml(material.material)}</td>
         <td class="teco-native-number">${formatQuantity(material.qty)}</td>
         <td>${escapeHtml(material.unit)}</td>
+        ${includeCosts ? `
+          <td class="teco-native-number">${formatMoney(material.unitPrice)}</td>
+          <td class="teco-native-number">${formatMoney(material.totalCost)}</td>
+          <td><span class="teco-native-hpp-status ${material.hasMissingPrice ? 'warning' : 'complete'}">${material.hasMissingPrice ? 'Harga belum diisi' : 'Lengkap'}</span></td>
+        ` : ''}
         <td>${escapeHtml(material.products.join(', '))}</td>
       </tr>
     `).join('');
@@ -5654,7 +5636,7 @@ body.dark .teco-native-modal-card {
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
     const products = aggregateProducts(transactions);
-    const materials = aggregateMaterials(products);
+    const materials = aggregateMaterials(products, root);
     const adjustments = reportAdjustments(mode, period, cashier);
     const adjustment = adjustmentTotals(adjustments);
     const rawRevenue = transactions.reduce((sum, transaction) => sum + toNumber(transaction.total), 0);
@@ -5726,6 +5708,8 @@ body.dark .teco-native-modal-card {
         '*ANALISA HPP — KHUSUS ADMIN*',
         `Omzet produk dasar margin: *${formatMoney(profit.adjustedMarginRevenue)}*`,
         `Total HPP tercatat: *${formatMoney(profit.totalHpp)}*`,
+        `Estimasi biaya semua komposisi bahan: *${formatMoney(report.materials.totalCost)}*`,
+        `Master harga aktif: *${report.materials.activeMasterPrices}/${report.materials.masterPriceCount} bahan*`,
         `Estimasi laba kotor: *${formatMoney(profit.estimatedGrossProfit)}*`,
         `Estimasi margin kotor: *${formatPercent(profit.grossMarginPct)}*`,
         `Estimasi laba setelah pengeluaran: *${formatMoney(profit.estimatedProfitAfterExpenses)}*`,
@@ -5789,7 +5773,7 @@ body.dark .teco-native-modal-card {
 
     if (report.materials.rows.length) {
       report.materials.rows.forEach((material) => {
-        lines.push(`• ${material.material}: ${materialDisplay(material)}`);
+        lines.push(`• ${material.material}: ${materialDisplay(material)}${report.profitAnalysis ? ` × ${formatMoney(material.unitPrice)} = *${formatMoney(material.totalCost)}*${material.hasMissingPrice ? ' (harga belum diisi)' : ''}` : ''}`);
       });
     } else {
       lines.push('• Tidak ada bahan terpakai');
@@ -5906,6 +5890,11 @@ body.dark .teco-native-modal-card {
       summary.push(
         ['Omzet Produk Dasar Margin', profit.adjustedMarginRevenue],
         ['Total HPP Tercatat', profit.totalHpp],
+        ['Estimasi Biaya Semua Komposisi Bahan', report.materials.totalCost],
+        ['Bahan dengan Harga Dasar Lengkap', report.materials.pricedMaterials],
+        ['Bahan dengan Harga Dasar Belum Diisi', report.materials.missingMaterials.length],
+        ['Master Harga Aktif', report.materials.activeMasterPrices],
+        ['Total Master Harga', report.materials.masterPriceCount],
         ['Estimasi Laba Kotor', profit.estimatedGrossProfit],
         ['Estimasi Margin Kotor (%)', profit.grossMarginPct],
         ['Estimasi Laba Setelah Pengeluaran', profit.estimatedProfitAfterExpenses],
@@ -5948,21 +5937,38 @@ body.dark .teco-native-modal-card {
       variants.push(row);
     });
 
-    const materials = [['No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis', 'Dipakai_Oleh']];
-    let materialNo = 0;
+    const materials = [[
+      'No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis',
+      ...(report.profitAnalysis ? ['Harga_Dasar_Per_Satuan', 'Total_Biaya', 'Harga_Beli', 'Isi_Kemasan', 'Status_Harga'] : []),
+      'Dipakai_Oleh'
+    ]];
+    let materialNo = 1;
     if (report.materials.concentrateMl > 0) {
-      materials.push([
+      const concentrateRow = [
         materialNo++, 'Konsentrat (kebutuhan produksi)',
         report.materials.concentrateMl, 'ml',
         `${formatQuantity(report.materials.concentrateMl)} ml`,
-        'Bahan antara', 'Produk berbasis konsentrat'
-      ]);
+        'Bahan antara'
+      ];
+      if (report.profitAnalysis) concentrateRow.push('', '', '', '', 'Informasi produksi');
+      concentrateRow.push('Produk berbasis konsentrat');
+      materials.push(concentrateRow);
     }
-    report.materials.rows.forEach((material) => materials.push([
-      materialNo++, material.material, material.qty, material.unit,
-      materialDisplay(material), materialKind(material),
-      material.products.join(', ')
-    ]));
+    report.materials.rows.forEach((material) => {
+      const row = [
+        materialNo++, material.material, material.qty, material.unit,
+        materialDisplay(material), materialKind(material)
+      ];
+      if (report.profitAnalysis) row.push(
+        material.unitPrice,
+        material.totalCost,
+        material.purchasePrice,
+        material.packageQty,
+        material.hasMissingPrice ? 'Harga belum diisi' : 'Lengkap'
+      );
+      row.push(material.products.join(', '));
+      materials.push(row);
+    });
 
     const transactions = [[
       'Tanggal', 'Waktu', 'ID_Transaksi', 'Kasir', 'Pembayaran', 'Catatan',
@@ -6032,8 +6038,20 @@ body.dark .teco-native-modal-card {
         row.hasMissingPrice ? 'Harga belum lengkap' : 'Lengkap'
       ]));
 
+      const masterPrices = [[
+        'No', 'Bahan', 'Harga_Beli', 'Isi_Kemasan', 'Satuan_Dasar',
+        'Harga_Dasar_Per_Satuan', 'Status', 'Terakhir_Diubah', 'Diubah_Oleh'
+      ]];
+      Array.from(normalizeHppMaterialPrices(report.root).values())
+        .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+        .forEach((row, index) => masterPrices.push([
+          index + 1, row.name, row.purchasePrice, row.packageQty, row.baseUnit,
+          row.unitPrice, row.unitPrice > 0 ? 'Aktif' : 'Belum diisi', row.updatedAt, row.updatedBy
+        ]));
+
       sheets[`Analisa HPP ${suffix}`] = hppProducts;
       sheets[`Biaya HPP ${suffix}`] = hppMaterials;
+      sheets['Master Harga Bahan'] = masterPrices;
     }
 
     return sheets;
@@ -6594,6 +6612,8 @@ body.dark .teco-native-modal-card {
           <div class="teco-native-profit-cards">
             <article><span>Omzet Produk</span><strong>${formatMoney(profitAnalysis.adjustedMarginRevenue)}</strong></article>
             <article><span>Total HPP</span><strong>${formatMoney(profitAnalysis.totalHpp)}</strong></article>
+            <article><span>Biaya Semua Komposisi</span><strong>${formatMoney(materialResult.totalCost)}</strong></article>
+            <article><span>Harga Dasar Aktif</span><strong>${materialResult.activeMasterPrices}/${materialResult.masterPriceCount}</strong></article>
             <article><span>Estimasi Laba Kotor</span><strong>${formatMoney(profitAnalysis.estimatedGrossProfit)}</strong></article>
             <article><span>Margin Kotor</span><strong>${formatPercent(profitAnalysis.grossMarginPct)}</strong></article>
             <article><span>Laba Setelah Pengeluaran</span><strong>${formatMoney(profitAnalysis.estimatedProfitAfterExpenses)}</strong></article>
@@ -6613,7 +6633,7 @@ body.dark .teco-native-modal-card {
 
       ${profitAnalysis && !profitAnalysis.recipesCount ? `
         <div class="teco-native-warning">
-          Belum ada HPP tersimpan. Buka <strong>Panel Admin → Analisa HPP Produk</strong>, isi harga bahan, lalu simpan setiap varian.
+          Belum ada HPP tersimpan. Buka <strong>Panel Admin → HPP & Harga Dasar Bahan</strong>, isi harga bahan, lalu simpan setiap varian.
         </div>
       ` : ''}
 
@@ -6627,6 +6647,13 @@ body.dark .teco-native-modal-card {
       ${profitAnalysis && profitAnalysis.incompletePriceProducts.length ? `
         <div class="teco-native-warning">
           Harga bahan belum lengkap untuk: ${escapeHtml(profitAnalysis.incompletePriceProducts.join(', '))}.
+        </div>
+      ` : ''}
+
+      ${profitAnalysis && materialResult.missingMaterials.length ? `
+        <div class="teco-native-warning">
+          Harga dasar belum diisi untuk: ${escapeHtml(materialResult.missingMaterials.join(', '))}.
+          Total biaya komposisi belum final sampai master harga dilengkapi.
         </div>
       ` : ''}
 
@@ -6648,11 +6675,14 @@ body.dark .teco-native-modal-card {
         </section>
 
         <section class="teco-native-panel">
-          <h4>Kebutuhan Bahan</h4>
+          <div class="teco-native-panel-title">
+            <h4>${profitAnalysis ? 'Kebutuhan & Nilai Semua Bahan — Khusus Admin' : 'Kebutuhan Bahan'}</h4>
+            ${profitAnalysis ? `<span class="teco-native-panel-note">Total estimasi: ${formatMoney(materialResult.totalCost)}</span>` : ''}
+          </div>
           <div class="teco-native-table-wrap">
             <table>
-              <thead><tr><th>No.</th><th>Bahan</th><th>Jumlah</th><th>Satuan</th><th>Dipakai oleh</th></tr></thead>
-              <tbody>${materialRows(materialResult.rows)}</tbody>
+              <thead><tr><th>No.</th><th>Bahan</th><th>Jumlah</th><th>Satuan</th>${profitAnalysis ? '<th>Harga Dasar</th><th>Total Biaya</th><th>Status</th>' : ''}<th>Dipakai oleh</th></tr></thead>
+              <tbody>${materialRows(materialResult.rows, !!profitAnalysis)}</tbody>
             </table>
           </div>
         </section>
@@ -6898,7 +6928,7 @@ body.dark .teco-native-modal-card {
   }
 })();
 </script>
-<!-- TECO_NATIVE_REPORT_V310_END -->
+<!-- TECO_NATIVE_REPORT_V330_END -->
 <script src="teco-reliability-v3.js"></script>
 </body>
 </html>

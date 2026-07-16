@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.1.0';
+  const VERSION = '3.3.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -1012,9 +1012,95 @@
     return known ? canonical(known[1]) : 'Tanpa varian';
   }
 
+  function normalizeHppUnit(unit) {
+    const raw = canonical(unit || 'unit').toLowerCase();
+    if (['g', 'gram', 'grams', 'gr'].includes(raw)) return 'gr';
+    if (['ml', 'milliliter', 'mililiter'].includes(raw)) return 'ml';
+    if (['pc', 'pcs', 'piece', 'pieces', 'buah', 'set'].includes(raw)) return 'pcs';
+    if (['portion', 'porsi'].includes(raw)) return 'porsi';
+    return raw || 'unit';
+  }
+
+  function hppMaterialNameKey(name) {
+    return canonical(name)
+      .toLowerCase()
+      .replace(/[._/\\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function hppMaterialPriceKey(name, unit) {
+    const nameKey = hppMaterialNameKey(name);
+    return nameKey ? `${nameKey}::${normalizeHppUnit(unit)}` : '';
+  }
+
+  function normalizeHppMaterialPrices(root) {
+    const raw = parseMaybeJson(root && root.hppData) || {};
+    const source = raw.materialPrices && typeof raw.materialPrices === 'object'
+      ? raw.materialPrices
+      : {};
+    const prices = new Map();
+
+    Object.entries(source).forEach(([storageKey, value]) => {
+      const row = parseMaybeJson(value);
+      if (!row || typeof row !== 'object') return;
+      const name = canonical(first(row, ['name', 'material', 'bahan', 'nama']));
+      const baseUnit = normalizeHppUnit(first(row, ['baseUnit', 'unit', 'satuan']) || 'unit');
+      const purchasePrice = toNumber(first(row, ['purchasePrice', 'hargaBeli', 'harga_beli', 'price']));
+      const packageQty = toNumber(first(row, ['packageQty', 'isiKemasan', 'isi_kemasan', 'qty', 'quantity'])) || 1;
+      const storedUnitPrice = toNumber(first(row, ['unitPrice', 'hargaDasar', 'harga_dasar', 'pricePerUnit']));
+      const unitPrice = storedUnitPrice > 0 ? storedUnitPrice : (purchasePrice > 0 && packageQty > 0 ? purchasePrice / packageQty : 0);
+      if (!name) return;
+      const key = hppMaterialPriceKey(name, baseUnit) || canonical(storageKey);
+      prices.set(key, {
+        key,
+        name,
+        baseUnit,
+        purchasePrice,
+        packageQty,
+        unitPrice,
+        updatedAt: canonical(first(row, ['updatedAt', 'updated_at'])),
+        updatedBy: canonical(first(row, ['updatedBy', 'updated_by']))
+      });
+    });
+
+    // Kompatibilitas data HPP v2: harga pada baris resep menjadi fallback
+    const recipeSource = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    Object.values(recipeSource).forEach((recipeValue) => {
+      const recipe = parseMaybeJson(recipeValue);
+      if (!recipe || typeof recipe !== 'object') return;
+      asArray(first(recipe, ['materials', 'bahan', 'ingredients'])).forEach((materialValue) => {
+        const material = parseMaybeJson(materialValue);
+        if (!material || typeof material !== 'object') return;
+        const name = canonical(first(material, ['name', 'material', 'bahan', 'ingredient', 'nama']));
+        const baseUnit = normalizeHppUnit(first(material, ['unit', 'satuan']) || 'unit');
+        const legacyPrice = toNumber(first(material, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+        const key = hppMaterialPriceKey(name, baseUnit);
+        if (!name || !key || prices.has(key)) return;
+        prices.set(key, {
+          key,
+          name,
+          baseUnit,
+          purchasePrice: legacyPrice,
+          packageQty: 1,
+          unitPrice: legacyPrice,
+          updatedAt: canonical(first(recipe, ['updatedAt', 'updated_at'])),
+          updatedBy: 'legacy-recipe'
+        });
+      });
+    });
+
+    return prices;
+  }
+
+  function findHppMaterialPrice(priceMap, name, unit) {
+    return priceMap.get(hppMaterialPriceKey(name, unit)) || null;
+  }
+
   function normalizeHppData(root) {
     const raw = parseMaybeJson(root && root.hppData) || {};
     const source = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    const priceMap = normalizeHppMaterialPrices(root);
     const recipes = [];
 
     Object.entries(source).forEach(([storageKey, recipe]) => {
@@ -1032,10 +1118,20 @@
           if (!row || typeof row !== 'object') return null;
           const name = canonical(first(row, ['name', 'material', 'bahan', 'ingredient', 'nama']));
           const usage = toNumber(first(row, ['usage', 'qty', 'quantity', 'jumlah', 'amount', 'takaran']));
-          const unit = canonical(first(row, ['unit', 'satuan']) || 'unit');
-          const price = toNumber(first(row, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+          const unit = normalizeHppUnit(first(row, ['unit', 'satuan']) || 'unit');
+          const legacyPrice = toNumber(first(row, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+          const master = findHppMaterialPrice(priceMap, name, unit);
+          const price = master ? toNumber(master.unitPrice) : legacyPrice;
           if (!name || usage < 0) return null;
-          return { name, usage, unit, price };
+          return {
+            name,
+            usage,
+            unit,
+            price,
+            purchasePrice: master ? master.purchasePrice : legacyPrice,
+            packageQty: master ? master.packageQty : 1,
+            priceSource: master ? 'Master harga' : (legacyPrice > 0 ? 'Harga resep lama' : 'Belum diisi')
+          };
         })
         .filter(Boolean);
 
@@ -1162,22 +1258,24 @@
       .sort((a, b) => b.qty - a.qty);
   }
 
-  function aggregateMaterials(products) {
+  function aggregateMaterials(products, root) {
     const materials = new Map();
     const unmapped = [];
     const concentrateRecipe = runtimeRecipeData.recipes.KONSENTRAT || [];
     const concentrateYield = runtimeRecipeData.concentrateYield || 1000;
+    const priceMap = normalizeHppMaterialPrices(root);
     let concentrateMl = 0;
 
     function addMaterial(material, qty, unit, productName, kind) {
       const name = canonical(material);
-      const key = `${keyText(name)}::${keyText(unit)}`;
+      const normalizedUnit = normalizeHppUnit(unit || 'unit');
+      const key = `${keyText(name)}::${keyText(normalizedUnit)}`;
 
       if (!materials.has(key)) {
         materials.set(key, {
           material: name,
           qty: 0,
-          unit: canonical(unit || 'unit'),
+          unit: normalizedUnit,
           kind: kind || 'Bahan baku',
           products: new Set()
         });
@@ -1239,16 +1337,34 @@
       }
     });
 
-    return {
-      rows: Array.from(materials.values())
-        .map((row) => ({
+    const rows = Array.from(materials.values())
+      .map((row) => {
+        const master = findHppMaterialPrice(priceMap, row.material, row.unit);
+        const unitPrice = master ? toNumber(master.unitPrice) : 0;
+        const totalCost = toNumber(row.qty) * unitPrice;
+        return {
           material: row.material,
           qty: row.qty,
           unit: row.unit,
           kind: row.kind,
-          products: Array.from(row.products).sort()
-        }))
-        .sort((a, b) => a.material.localeCompare(b.material, 'id')),
+          products: Array.from(row.products).sort(),
+          purchasePrice: master ? master.purchasePrice : 0,
+          packageQty: master ? master.packageQty : 0,
+          unitPrice,
+          totalCost,
+          hasMissingPrice: toNumber(row.qty) > 0 && !(unitPrice > 0)
+        };
+      })
+      .sort((a, b) => a.material.localeCompare(b.material, 'id'));
+
+    const activeMasterPrices = Array.from(priceMap.values()).filter((row) => toNumber(row.unitPrice) > 0).length;
+    return {
+      rows,
+      totalCost: rows.reduce((sum, row) => sum + toNumber(row.totalCost), 0),
+      pricedMaterials: rows.filter((row) => !row.hasMissingPrice).length,
+      missingMaterials: rows.filter((row) => row.hasMissingPrice).map((row) => row.material),
+      masterPriceCount: priceMap.size,
+      activeMasterPrices,
       concentrateMl,
       concentrateBatches: concentrateYield > 0 ? concentrateMl / concentrateYield : 0,
       concentrateYield,
@@ -1645,9 +1761,9 @@
     }).join('');
   }
 
-  function materialRows(materials) {
+  function materialRows(materials, includeCosts) {
     if (!materials.length) {
-      return '<tr><td colspan="5" class="teco-native-empty">Belum ada bahan terpakai pada periode ini.</td></tr>';
+      return `<tr><td colspan="${includeCosts ? 8 : 5}" class="teco-native-empty">Belum ada bahan terpakai pada periode ini.</td></tr>`;
     }
 
     return materials.map((material, index) => `
@@ -1656,6 +1772,11 @@
         <td>${escapeHtml(material.material)}</td>
         <td class="teco-native-number">${formatQuantity(material.qty)}</td>
         <td>${escapeHtml(material.unit)}</td>
+        ${includeCosts ? `
+          <td class="teco-native-number">${formatMoney(material.unitPrice)}</td>
+          <td class="teco-native-number">${formatMoney(material.totalCost)}</td>
+          <td><span class="teco-native-hpp-status ${material.hasMissingPrice ? 'warning' : 'complete'}">${material.hasMissingPrice ? 'Harga belum diisi' : 'Lengkap'}</span></td>
+        ` : ''}
         <td>${escapeHtml(material.products.join(', '))}</td>
       </tr>
     `).join('');
@@ -1775,7 +1896,7 @@
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
     const products = aggregateProducts(transactions);
-    const materials = aggregateMaterials(products);
+    const materials = aggregateMaterials(products, root);
     const adjustments = reportAdjustments(mode, period, cashier);
     const adjustment = adjustmentTotals(adjustments);
     const rawRevenue = transactions.reduce((sum, transaction) => sum + toNumber(transaction.total), 0);
@@ -1847,6 +1968,8 @@
         '*ANALISA HPP — KHUSUS ADMIN*',
         `Omzet produk dasar margin: *${formatMoney(profit.adjustedMarginRevenue)}*`,
         `Total HPP tercatat: *${formatMoney(profit.totalHpp)}*`,
+        `Estimasi biaya semua komposisi bahan: *${formatMoney(report.materials.totalCost)}*`,
+        `Master harga aktif: *${report.materials.activeMasterPrices}/${report.materials.masterPriceCount} bahan*`,
         `Estimasi laba kotor: *${formatMoney(profit.estimatedGrossProfit)}*`,
         `Estimasi margin kotor: *${formatPercent(profit.grossMarginPct)}*`,
         `Estimasi laba setelah pengeluaran: *${formatMoney(profit.estimatedProfitAfterExpenses)}*`,
@@ -1910,7 +2033,7 @@
 
     if (report.materials.rows.length) {
       report.materials.rows.forEach((material) => {
-        lines.push(`• ${material.material}: ${materialDisplay(material)}`);
+        lines.push(`• ${material.material}: ${materialDisplay(material)}${report.profitAnalysis ? ` × ${formatMoney(material.unitPrice)} = *${formatMoney(material.totalCost)}*${material.hasMissingPrice ? ' (harga belum diisi)' : ''}` : ''}`);
       });
     } else {
       lines.push('• Tidak ada bahan terpakai');
@@ -2027,6 +2150,11 @@
       summary.push(
         ['Omzet Produk Dasar Margin', profit.adjustedMarginRevenue],
         ['Total HPP Tercatat', profit.totalHpp],
+        ['Estimasi Biaya Semua Komposisi Bahan', report.materials.totalCost],
+        ['Bahan dengan Harga Dasar Lengkap', report.materials.pricedMaterials],
+        ['Bahan dengan Harga Dasar Belum Diisi', report.materials.missingMaterials.length],
+        ['Master Harga Aktif', report.materials.activeMasterPrices],
+        ['Total Master Harga', report.materials.masterPriceCount],
         ['Estimasi Laba Kotor', profit.estimatedGrossProfit],
         ['Estimasi Margin Kotor (%)', profit.grossMarginPct],
         ['Estimasi Laba Setelah Pengeluaran', profit.estimatedProfitAfterExpenses],
@@ -2069,21 +2197,38 @@
       variants.push(row);
     });
 
-    const materials = [['No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis', 'Dipakai_Oleh']];
-    let materialNo = 0;
+    const materials = [[
+      'No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis',
+      ...(report.profitAnalysis ? ['Harga_Dasar_Per_Satuan', 'Total_Biaya', 'Harga_Beli', 'Isi_Kemasan', 'Status_Harga'] : []),
+      'Dipakai_Oleh'
+    ]];
+    let materialNo = 1;
     if (report.materials.concentrateMl > 0) {
-      materials.push([
+      const concentrateRow = [
         materialNo++, 'Konsentrat (kebutuhan produksi)',
         report.materials.concentrateMl, 'ml',
         `${formatQuantity(report.materials.concentrateMl)} ml`,
-        'Bahan antara', 'Produk berbasis konsentrat'
-      ]);
+        'Bahan antara'
+      ];
+      if (report.profitAnalysis) concentrateRow.push('', '', '', '', 'Informasi produksi');
+      concentrateRow.push('Produk berbasis konsentrat');
+      materials.push(concentrateRow);
     }
-    report.materials.rows.forEach((material) => materials.push([
-      materialNo++, material.material, material.qty, material.unit,
-      materialDisplay(material), materialKind(material),
-      material.products.join(', ')
-    ]));
+    report.materials.rows.forEach((material) => {
+      const row = [
+        materialNo++, material.material, material.qty, material.unit,
+        materialDisplay(material), materialKind(material)
+      ];
+      if (report.profitAnalysis) row.push(
+        material.unitPrice,
+        material.totalCost,
+        material.purchasePrice,
+        material.packageQty,
+        material.hasMissingPrice ? 'Harga belum diisi' : 'Lengkap'
+      );
+      row.push(material.products.join(', '));
+      materials.push(row);
+    });
 
     const transactions = [[
       'Tanggal', 'Waktu', 'ID_Transaksi', 'Kasir', 'Pembayaran', 'Catatan',
@@ -2153,8 +2298,20 @@
         row.hasMissingPrice ? 'Harga belum lengkap' : 'Lengkap'
       ]));
 
+      const masterPrices = [[
+        'No', 'Bahan', 'Harga_Beli', 'Isi_Kemasan', 'Satuan_Dasar',
+        'Harga_Dasar_Per_Satuan', 'Status', 'Terakhir_Diubah', 'Diubah_Oleh'
+      ]];
+      Array.from(normalizeHppMaterialPrices(report.root).values())
+        .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+        .forEach((row, index) => masterPrices.push([
+          index + 1, row.name, row.purchasePrice, row.packageQty, row.baseUnit,
+          row.unitPrice, row.unitPrice > 0 ? 'Aktif' : 'Belum diisi', row.updatedAt, row.updatedBy
+        ]));
+
       sheets[`Analisa HPP ${suffix}`] = hppProducts;
       sheets[`Biaya HPP ${suffix}`] = hppMaterials;
+      sheets['Master Harga Bahan'] = masterPrices;
     }
 
     return sheets;
@@ -2715,6 +2872,8 @@
           <div class="teco-native-profit-cards">
             <article><span>Omzet Produk</span><strong>${formatMoney(profitAnalysis.adjustedMarginRevenue)}</strong></article>
             <article><span>Total HPP</span><strong>${formatMoney(profitAnalysis.totalHpp)}</strong></article>
+            <article><span>Biaya Semua Komposisi</span><strong>${formatMoney(materialResult.totalCost)}</strong></article>
+            <article><span>Harga Dasar Aktif</span><strong>${materialResult.activeMasterPrices}/${materialResult.masterPriceCount}</strong></article>
             <article><span>Estimasi Laba Kotor</span><strong>${formatMoney(profitAnalysis.estimatedGrossProfit)}</strong></article>
             <article><span>Margin Kotor</span><strong>${formatPercent(profitAnalysis.grossMarginPct)}</strong></article>
             <article><span>Laba Setelah Pengeluaran</span><strong>${formatMoney(profitAnalysis.estimatedProfitAfterExpenses)}</strong></article>
@@ -2751,6 +2910,13 @@
         </div>
       ` : ''}
 
+      ${profitAnalysis && materialResult.missingMaterials.length ? `
+        <div class="teco-native-warning">
+          Harga dasar belum diisi untuk: ${escapeHtml(materialResult.missingMaterials.join(', '))}.
+          Total biaya komposisi belum final sampai master harga dilengkapi.
+        </div>
+      ` : ''}
+
       ${profitAnalysis && profitAnalysis.hasCupAdjustment ? `
         <div class="teco-native-warning">
           Ada penyesuaian jumlah cup yang tidak memiliki rincian varian. Biaya HPP untuk penyesuaian tersebut belum dapat dialokasikan otomatis.
@@ -2769,11 +2935,14 @@
         </section>
 
         <section class="teco-native-panel">
-          <h4>Kebutuhan Bahan</h4>
+          <div class="teco-native-panel-title">
+            <h4>${profitAnalysis ? 'Kebutuhan & Nilai Semua Bahan — Khusus Admin' : 'Kebutuhan Bahan'}</h4>
+            ${profitAnalysis ? `<span class="teco-native-panel-note">Total estimasi: ${formatMoney(materialResult.totalCost)}</span>` : ''}
+          </div>
           <div class="teco-native-table-wrap">
             <table>
-              <thead><tr><th>No.</th><th>Bahan</th><th>Jumlah</th><th>Satuan</th><th>Dipakai oleh</th></tr></thead>
-              <tbody>${materialRows(materialResult.rows)}</tbody>
+              <thead><tr><th>No.</th><th>Bahan</th><th>Jumlah</th><th>Satuan</th>${profitAnalysis ? '<th>Harga Dasar</th><th>Total Biaya</th><th>Status</th>' : ''}<th>Dipakai oleh</th></tr></thead>
+              <tbody>${materialRows(materialResult.rows, !!profitAnalysis)}</tbody>
             </table>
           </div>
         </section>

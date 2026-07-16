@@ -1,8 +1,8 @@
-/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.2.0 */
+/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.3.0 */
 (function () {
   'use strict';
 
-  const VERSION = '3.2.0';
+  const VERSION = '3.3.0';
   const PRIMARY_KEY = 'teco_pos_data';
   const EMERGENCY_KEY = 'teco_pos_emergency_backup_v3';
   const DEVICE_KEY = 'teco_pos_device_id_v3';
@@ -159,11 +159,27 @@
       const normalizedKey = hppRecipeKey(recipe, key);
       recipes[normalizedKey] = { ...clone(recipe), key: normalizedKey };
     });
+
+    const priceSource = raw.materialPrices && typeof raw.materialPrices === 'object'
+      ? raw.materialPrices
+      : {};
+    const materialPrices = {};
+    Object.entries(priceSource).forEach(([key, record]) => {
+      if (!record || typeof record !== 'object') return;
+      const normalizedKey = String(record.key || key || '').trim();
+      if (!normalizedKey) return;
+      materialPrices[normalizedKey] = { ...clone(record), key: normalizedKey };
+    });
+
     return {
-      version: Math.max(2, Number(raw.version) || 0),
+      version: Math.max(3, Number(raw.version) || 0),
       recipes,
       deletedRecipes: raw.deletedRecipes && typeof raw.deletedRecipes === 'object'
         ? clone(raw.deletedRecipes)
+        : {},
+      materialPrices,
+      deletedMaterialPrices: raw.deletedMaterialPrices && typeof raw.deletedMaterialPrices === 'object'
+        ? clone(raw.deletedMaterialPrices)
         : {}
     };
   }
@@ -176,32 +192,54 @@
     return Number.isFinite(time) ? time : 0;
   }
 
+  function mergeHppCollection(localRows, remoteRows, localDeleted, remoteDeleted) {
+    const records = {};
+    Object.entries(remoteRows || {}).forEach(([key, record]) => { records[key] = clone(record); });
+    Object.entries(localRows || {}).forEach(([key, record]) => {
+      records[key] = preferRecord(records[key], record);
+    });
+
+    const deleted = { ...(remoteDeleted || {}) };
+    Object.entries(localDeleted || {}).forEach(([key, tombstone]) => {
+      if (tombstoneTime(tombstone) >= tombstoneTime(deleted[key])) {
+        deleted[key] = clone(tombstone);
+      }
+    });
+
+    Object.entries(records).forEach(([key, record]) => {
+      if (
+        Object.prototype.hasOwnProperty.call(deleted, key)
+        && tombstoneTime(deleted[key]) >= recordTime(record)
+      ) {
+        delete records[key];
+      }
+    });
+    return { records, deleted };
+  }
+
   function mergeHppData(localValue, remoteValue) {
     const local = normalizeHppData(localValue);
     const remote = normalizeHppData(remoteValue);
-    const recipes = {};
-    Object.entries(remote.recipes).forEach(([key, recipe]) => { recipes[key] = clone(recipe); });
-    Object.entries(local.recipes).forEach(([key, recipe]) => {
-      recipes[key] = preferRecord(recipes[key], recipe);
-    });
+    const recipeMerge = mergeHppCollection(
+      local.recipes,
+      remote.recipes,
+      local.deletedRecipes,
+      remote.deletedRecipes
+    );
+    const materialMerge = mergeHppCollection(
+      local.materialPrices,
+      remote.materialPrices,
+      local.deletedMaterialPrices,
+      remote.deletedMaterialPrices
+    );
 
-    const deletedRecipes = { ...remote.deletedRecipes };
-    Object.entries(local.deletedRecipes).forEach(([key, tombstone]) => {
-      if (tombstoneTime(tombstone) >= tombstoneTime(deletedRecipes[key])) {
-        deletedRecipes[key] = clone(tombstone);
-      }
-    });
-
-    Object.entries(recipes).forEach(([key, recipe]) => {
-      if (
-        Object.prototype.hasOwnProperty.call(deletedRecipes, key)
-        && tombstoneTime(deletedRecipes[key]) >= recordTime(recipe)
-      ) {
-        delete recipes[key];
-      }
-    });
-
-    return { version: 2, recipes, deletedRecipes };
+    return {
+      version: 3,
+      recipes: recipeMerge.records,
+      deletedRecipes: recipeMerge.deleted,
+      materialPrices: materialMerge.records,
+      deletedMaterialPrices: materialMerge.deleted
+    };
   }
 
   function mergeTombstones(a, b) {
@@ -893,7 +931,7 @@
     const month = document.getElementById('exportMonth');
     if (month && !month.value) month.value = new Date().toISOString().slice(0, 7);
     const version = document.querySelector('.version-tag');
-    if (version) version.textContent = 'v3.2.0 · HPP-sync · Cloud-safe';
+    if (version) version.textContent = 'v3.3.0 · Master Harga Bahan · HPP-sync';
     const storageInfo = document.getElementById('syncStorageStats');
     if (storageInfo) {
       const bytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;
