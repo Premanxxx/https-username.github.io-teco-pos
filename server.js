@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 8080;
+const PORT = Number(process.env.PORT || 8080);
 
 const mimeTypes = {
   '.html': 'text/html',
@@ -19,7 +19,9 @@ const mimeTypes = {
 };
 
 const server = http.createServer((req, res) => {
-  let filePath = req.url === '/' ? '/pos_app_pwa.html' : req.url;
+  // index.html adalah aplikasi utama yang memuat sinkronisasi Firebase,
+  // laporan native, serta analisa HPP admin terbaru.
+  let filePath = req.url === '/' ? '/index.html' : req.url;
   filePath = path.join(__dirname, filePath);
 
   const ext = path.extname(filePath).toLowerCase();

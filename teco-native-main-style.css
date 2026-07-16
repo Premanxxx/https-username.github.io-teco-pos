@@ -118,6 +118,62 @@
   margin-top: 6px;
   font-size: 19px;
 }
+.teco-native-profit-summary {
+  margin: 8px 0 12px;
+  overflow: hidden;
+  border: 1px solid #a7f3d0;
+  border-radius: 14px;
+  background: #ecfdf5;
+}
+.teco-native-profit-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #a7f3d0;
+}
+.teco-native-profit-title h4 { margin: 0; font-size: 14px; }
+.teco-native-profit-title p {
+  margin: 4px 0 0;
+  color: #047857;
+  font-size: 11px;
+}
+.teco-native-profit-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 9px;
+  padding: 12px;
+}
+.teco-native-profit-cards article {
+  padding: 12px;
+  border: 1px solid #d1fae5;
+  border-radius: 11px;
+  background: #fff;
+}
+.teco-native-profit-cards span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+.teco-native-profit-cards strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 17px;
+}
+.teco-native-hpp-status {
+  display: inline-block;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.teco-native-hpp-status.complete { background: #dcfce7; color: #166534; }
+.teco-native-hpp-status.warning { background: #fef3c7; color: #92400e; }
+.teco-native-hpp-status.missing { background: #fee2e2; color: #991b1b; }
 .teco-native-warning {
   margin: 8px 0 12px;
   padding: 10px 12px;
@@ -146,6 +202,14 @@
   font-size: 13px;
 }
 .teco-native-transactions { margin-top: 12px; }
+.teco-native-hpp-materials { margin-top: 12px; }
+.teco-native-panel-note {
+  padding: 8px 12px;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
 .teco-native-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -186,9 +250,20 @@ body.dark #teco-native-report {
 body.dark-mode .teco-native-panel,
 body.dark .teco-native-panel,
 body.dark-mode .teco-native-cards article,
-body.dark .teco-native-cards article {
+body.dark .teco-native-cards article,
+body.dark-mode .teco-native-profit-cards article,
+body.dark .teco-native-profit-cards article {
   border-color: #334155;
   background: #1f2937;
+}
+body.dark-mode .teco-native-profit-summary,
+body.dark .teco-native-profit-summary {
+  border-color: #065f46;
+  background: #022c22;
+}
+body.dark-mode .teco-native-profit-title,
+body.dark .teco-native-profit-title {
+  border-color: #065f46;
 }
 body.dark-mode .teco-native-panel h4,
 body.dark .teco-native-panel h4,
@@ -202,8 +277,10 @@ body.dark .teco-native-controls {
 }
 @media (max-width: 850px) {
   .teco-native-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .teco-native-profit-cards { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .teco-native-grid { grid-template-columns: 1fr; }
   .teco-native-head { flex-direction: column; }
+  .teco-native-profit-title { flex-direction: column; }
   .teco-native-status { white-space: normal; }
 }
 

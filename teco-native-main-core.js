@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.0.0';
+  const VERSION = '3.1.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -332,6 +332,10 @@
     }).format(number);
   }
 
+  function formatPercent(value) {
+    return `${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(toNumber(value))}%`;
+  }
+
   function parseDate(value) {
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
       return new Date(value.getTime());
@@ -513,7 +517,7 @@
     if (typeof raw === 'string' || typeof raw === 'number') {
       const name = canonical(raw);
       return name
-        ? { name, baseName: name, variant: '', qty: 1, price: 0, subtotal: 0 }
+        ? { productId: '', name, baseName: name, variant: '', qty: 1, price: 0, subtotal: 0 }
         : null;
     }
 
@@ -530,6 +534,17 @@
 
     let productNode = first(raw, ['product', 'item', 'menu']);
     productNode = parseMaybeJson(productNode);
+
+    let productId = first(raw, [
+      'productId', 'product_id', 'menuId', 'menu_id', 'itemId', 'item_id',
+      'idProduk', 'id_produk', 'sku', 'code', 'kode'
+    ]);
+
+    if (!productId && productNode && typeof productNode === 'object') {
+      productId = first(productNode, [
+        'id', 'productId', 'product_id', 'menuId', 'menu_id', 'sku', 'code', 'kode'
+      ]);
+    }
 
     let baseName = first(raw, [
       'name', 'nama', 'productName', 'product_name', 'itemName',
@@ -597,6 +612,7 @@
         : baseName;
 
     return {
+      productId: canonical(productId),
       name: canonical(name),
       baseName,
       variant,
@@ -966,12 +982,139 @@
     return null;
   }
 
+  function normalizeHppVariant(value) {
+    const key = keyText(value);
+    if (!key || key === 'TANPA VARIAN' || key === 'NONE' || key === 'DEFAULT') return 'TANPA VARIAN';
+    if (/DINGIN|ICE|ICED|COLD/.test(key)) return 'DINGIN';
+    if (/HANGAT|PANAS|HOT|WARM/.test(key)) return 'HANGAT';
+    return key;
+  }
+
+  function stripVariantSuffix(value) {
+    const text = canonical(value);
+    return canonical(
+      text
+        .replace(/\s*[-–—]\s*(Dingin|Hangat|Panas|Ice|Iced|Hot|Tanpa Varian)\s*$/i, '')
+        .replace(/\s*\((Dingin|Hangat|Panas|Ice|Iced|Hot|Tanpa Varian)\)\s*$/i, '')
+    );
+  }
+
+  function inferredProductVariant(item) {
+    if (canonical(item.variant)) return canonical(item.variant);
+    const name = canonical(item.name);
+    const baseName = canonical(item.baseName);
+    if (baseName && keyText(name) !== keyText(baseName)) {
+      const escaped = baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const suffix = name.match(new RegExp(`^${escaped}\\s*[-–—]\\s*(.+)$`, 'i'));
+      if (suffix && suffix[1]) return canonical(suffix[1]);
+    }
+    const known = name.match(/(?:[-–—]|\()\s*(Dingin|Hangat|Panas|Ice|Iced|Hot|Tanpa Varian)\)?\s*$/i);
+    return known ? canonical(known[1]) : 'Tanpa varian';
+  }
+
+  function normalizeHppData(root) {
+    const raw = parseMaybeJson(root && root.hppData) || {};
+    const source = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    const recipes = [];
+
+    Object.entries(source).forEach(([storageKey, recipe]) => {
+      recipe = parseMaybeJson(recipe);
+      if (!recipe || typeof recipe !== 'object') return;
+
+      const productName = canonical(first(recipe, [
+        'productName', 'product_name', 'name', 'namaProduk', 'nama_produk'
+      ]));
+      if (!productName) return;
+
+      const materials = asArray(first(recipe, ['materials', 'bahan', 'ingredients']))
+        .map((row) => {
+          row = parseMaybeJson(row);
+          if (!row || typeof row !== 'object') return null;
+          const name = canonical(first(row, ['name', 'material', 'bahan', 'ingredient', 'nama']));
+          const usage = toNumber(first(row, ['usage', 'qty', 'quantity', 'jumlah', 'amount', 'takaran']));
+          const unit = canonical(first(row, ['unit', 'satuan']) || 'unit');
+          const price = toNumber(first(row, ['price', 'harga', 'unitPrice', 'hargaSatuan']));
+          if (!name || usage < 0) return null;
+          return { name, usage, unit, price };
+        })
+        .filter(Boolean);
+
+      const hppPerCup = materials.reduce(
+        (sum, row) => sum + (toNumber(row.usage) * toNumber(row.price)),
+        0
+      );
+
+      recipes.push({
+        storageKey: canonical(storageKey),
+        productId: canonical(first(recipe, ['productId', 'product_id', 'idProduk', 'id_produk'])),
+        productName,
+        productNameKey: keyText(productName),
+        variant: canonical(first(recipe, ['variant', 'varian']) || 'Tanpa varian'),
+        variantKey: normalizeHppVariant(first(recipe, ['variant', 'varian']) || 'Tanpa varian'),
+        sellingPrice: toNumber(first(recipe, ['sellingPrice', 'selling_price', 'hargaJual', 'harga_jual'])),
+        materials,
+        hppPerCup,
+        updatedAt: canonical(first(recipe, ['updatedAt', 'updated_at']))
+      });
+    });
+
+    return recipes;
+  }
+
+  function productVariantKeys(product) {
+    const keys = new Set();
+    (product.variants || []).forEach((variant) => keys.add(normalizeHppVariant(variant)));
+    if (!keys.size) keys.add('TANPA VARIAN');
+    return keys;
+  }
+
+  function findHppRecipe(product, recipes) {
+    const productIds = new Set((product.productIds || []).map((id) => canonical(id)).filter(Boolean));
+    const nameKeys = new Set();
+    [product.name, ...(product.baseNames || []), ...(product.sourceNames || [])].forEach((name) => {
+      if (!name) return;
+      nameKeys.add(keyText(name));
+      nameKeys.add(keyText(stripVariantSuffix(name)));
+    });
+    const variantKeys = productVariantKeys(product);
+    let best = null;
+    let bestScore = -1;
+
+    recipes.forEach((recipe) => {
+      let score = 0;
+      if (recipe.productId && productIds.has(recipe.productId)) score += 120;
+      if (nameKeys.has(recipe.productNameKey)) score += 90;
+      else {
+        for (const nameKey of nameKeys) {
+          if (!nameKey || !recipe.productNameKey) continue;
+          if (nameKey.includes(recipe.productNameKey) || recipe.productNameKey.includes(nameKey)) {
+            score += 35;
+            break;
+          }
+        }
+      }
+
+      if (variantKeys.has(recipe.variantKey)) score += 30;
+      else if (recipe.variantKey === 'TANPA VARIAN' || variantKeys.has('TANPA VARIAN')) score += 5;
+      else score -= 45;
+
+      if (score > bestScore) {
+        best = recipe;
+        bestScore = score;
+      }
+    });
+
+    return bestScore >= 60 ? best : null;
+  }
+
   function aggregateProducts(transactions) {
     const map = new Map();
 
     transactions.forEach((transaction) => {
       transaction.items.forEach((item) => {
         const sourceName = canonical(item.name);
+        const baseName = canonical(item.baseName || stripVariantSuffix(sourceName));
+        const sourceVariant = inferredProductVariant(item);
         const override = variantOverride(sourceName);
         const name = canonical(override.displayName || sourceName);
         const multiplier = toNumber(override.cupMultiplier) > 0
@@ -986,7 +1129,10 @@
             qty: 0,
             revenue: 0,
             recipeKey: canonical(override.recipeKey || ''),
-            sourceNames: new Set()
+            sourceNames: new Set(),
+            baseNames: new Set(),
+            variants: new Set(),
+            productIds: new Set()
           });
         }
 
@@ -995,16 +1141,23 @@
         row.revenue += toNumber(item.subtotal);
         if (override.recipeKey) row.recipeKey = canonical(override.recipeKey);
         row.sourceNames.add(sourceName);
+        if (baseName) row.baseNames.add(baseName);
+        if (sourceVariant) row.variants.add(sourceVariant);
+        if (item.productId) row.productIds.add(canonical(item.productId));
       });
     });
 
     return Array.from(map.values())
       .map((row) => ({
+        key: keyText(row.name),
         name: row.name,
         qty: row.qty,
         revenue: row.revenue,
         recipeKey: row.recipeKey,
-        sourceNames: Array.from(row.sourceNames)
+        sourceNames: Array.from(row.sourceNames),
+        baseNames: Array.from(row.baseNames),
+        variants: Array.from(row.variants),
+        productIds: Array.from(row.productIds)
       }))
       .sort((a, b) => b.qty - a.qty);
   }
@@ -1100,6 +1253,147 @@
       concentrateBatches: concentrateYield > 0 ? concentrateMl / concentrateYield : 0,
       concentrateYield,
       unmapped: Array.from(new Set(unmapped)).sort()
+    };
+  }
+
+  function aggregateHppProfit(products, root, adjustment, totalExpenses) {
+    const recipes = normalizeHppData(root);
+    const materialMap = new Map();
+    const productRows = [];
+    const missingProducts = [];
+    const incompletePriceProducts = [];
+    let totalHpp = 0;
+    let productRevenue = 0;
+    let matchedCups = 0;
+    let costedCups = 0;
+
+    function addCostMaterial(material, product, recipe) {
+      const qty = toNumber(material.usage) * toNumber(product.qty);
+      const totalCost = qty * toNumber(material.price);
+      const key = `${keyText(material.name)}::${keyText(material.unit)}`;
+      if (!materialMap.has(key)) {
+        materialMap.set(key, {
+          material: canonical(material.name),
+          qty: 0,
+          unit: canonical(material.unit || 'unit'),
+          totalCost: 0,
+          products: new Set(),
+          recipes: new Set(),
+          hasMissingPrice: false
+        });
+      }
+      const row = materialMap.get(key);
+      row.qty += qty;
+      row.totalCost += totalCost;
+      row.products.add(product.name);
+      row.recipes.add(`${recipe.productName} (${recipe.variant})`);
+      if (toNumber(material.usage) > 0 && !(toNumber(material.price) > 0)) row.hasMissingPrice = true;
+    }
+
+    products.forEach((product) => {
+      const qty = toNumber(product.qty);
+      const revenue = toNumber(product.revenue);
+      const averageSellingPrice = qty > 0 ? revenue / qty : 0;
+      productRevenue += revenue;
+      const recipe = findHppRecipe(product, recipes);
+
+      if (!recipe) {
+        missingProducts.push(product.name);
+        productRows.push({
+          key: product.key || keyText(product.name),
+          name: product.name,
+          qty,
+          revenue,
+          averageSellingPrice,
+          recipeName: '',
+          recipeVariant: '',
+          hppPerCup: null,
+          totalHpp: null,
+          grossProfit: null,
+          marginPct: null,
+          status: 'HPP belum dibuat',
+          isComplete: false
+        });
+        return;
+      }
+
+      matchedCups += qty;
+      const hasMissingPrice = recipe.materials.some(
+        (material) => toNumber(material.usage) > 0 && !(toNumber(material.price) > 0)
+      );
+      if (!hasMissingPrice) costedCups += qty;
+      else incompletePriceProducts.push(product.name);
+
+      const hppPerCup = toNumber(recipe.hppPerCup);
+      const rowHpp = hppPerCup * qty;
+      const grossProfit = revenue - rowHpp;
+      const marginPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+      totalHpp += rowHpp;
+      recipe.materials.forEach((material) => addCostMaterial(material, product, recipe));
+
+      productRows.push({
+        key: product.key || keyText(product.name),
+        name: product.name,
+        qty,
+        revenue,
+        averageSellingPrice,
+        recipeName: recipe.productName,
+        recipeVariant: recipe.variant,
+        hppPerCup,
+        totalHpp: rowHpp,
+        grossProfit,
+        marginPct,
+        status: hasMissingPrice ? 'Harga bahan belum lengkap' : 'Lengkap',
+        isComplete: !hasMissingPrice,
+        updatedAt: recipe.updatedAt
+      });
+    });
+
+    const adjustedMarginRevenue = productRevenue + toNumber(adjustment && adjustment.revenue);
+    const estimatedGrossProfit = adjustedMarginRevenue - totalHpp;
+    const grossMarginPct = adjustedMarginRevenue > 0
+      ? (estimatedGrossProfit / adjustedMarginRevenue) * 100
+      : 0;
+    const estimatedProfitAfterExpenses = estimatedGrossProfit - toNumber(totalExpenses);
+    const profitAfterExpensesPct = adjustedMarginRevenue > 0
+      ? (estimatedProfitAfterExpenses / adjustedMarginRevenue) * 100
+      : 0;
+    const totalProductCups = products.reduce((sum, product) => sum + toNumber(product.qty), 0);
+    const coveragePct = totalProductCups > 0 ? (costedCups / totalProductCups) * 100 : 0;
+
+    return {
+      recipesCount: recipes.length,
+      products: productRows,
+      materials: Array.from(materialMap.values())
+        .map((row) => ({
+          material: row.material,
+          qty: row.qty,
+          unit: row.unit,
+          averageUnitPrice: row.qty > 0 ? row.totalCost / row.qty : 0,
+          totalCost: row.totalCost,
+          products: Array.from(row.products).sort((a, b) => a.localeCompare(b, 'id')),
+          recipes: Array.from(row.recipes).sort((a, b) => a.localeCompare(b, 'id')),
+          hasMissingPrice: row.hasMissingPrice
+        }))
+        .sort((a, b) => a.material.localeCompare(b.material, 'id')),
+      productRevenue,
+      adjustedMarginRevenue,
+      totalHpp,
+      estimatedGrossProfit,
+      grossMarginPct,
+      estimatedProfitAfterExpenses,
+      profitAfterExpensesPct,
+      averageHppPerCup: matchedCups > 0 ? totalHpp / matchedCups : 0,
+      totalProductCups,
+      matchedCups,
+      costedCups,
+      coveragePct,
+      missingProducts: Array.from(new Set(missingProducts)).sort((a, b) => a.localeCompare(b, 'id')),
+      incompletePriceProducts: Array.from(new Set(incompletePriceProducts)).sort((a, b) => a.localeCompare(b, 'id')),
+      hasCupAdjustment: !!toNumber(adjustment && adjustment.cup),
+      isComplete: missingProducts.length === 0
+        && incompletePriceProducts.length === 0
+        && !toNumber(adjustment && adjustment.cup)
     };
   }
 
@@ -1309,20 +1603,46 @@
     `).join('');
   }
 
-  function productRows(products) {
+  function productRows(products, profitAnalysis) {
     if (!products.length) {
-      return '<tr><td colspan="5" class="teco-native-empty">Belum ada produk terjual pada periode ini.</td></tr>';
+      return `<tr><td colspan="${profitAnalysis ? 10 : 5}" class="teco-native-empty">Belum ada produk terjual pada periode ini.</td></tr>`;
     }
 
-    return products.map((product, index) => `
-      <tr>
-        <td>${index + 1}</td>
-        <td>${escapeHtml(product.name)}</td>
-        <td class="teco-native-number">${formatQuantity(product.qty)}</td>
-        <td class="teco-native-number">${formatMoney(product.revenue)}</td>
-        <td>${escapeHtml(recipeNameForProduct(product.name, product.recipeKey))}</td>
-      </tr>
-    `).join('');
+    const profitMap = new Map(
+      (profitAnalysis && profitAnalysis.products || []).map((row) => [row.key, row])
+    );
+
+    return products.map((product, index) => {
+      const profit = profitMap.get(product.key || keyText(product.name));
+      const profitCells = profitAnalysis
+        ? profit && profit.hppPerCup !== null
+          ? `
+            <td class="teco-native-number">${formatMoney(profit.hppPerCup)}</td>
+            <td class="teco-native-number">${formatMoney(profit.totalHpp)}</td>
+            <td class="teco-native-number">${formatMoney(profit.grossProfit)}</td>
+            <td class="teco-native-number">${formatPercent(profit.marginPct)}</td>
+            <td><span class="teco-native-hpp-status ${profit.isComplete ? 'complete' : 'warning'}">${escapeHtml(profit.status)}</span></td>
+          `
+          : `
+            <td class="teco-native-number">-</td>
+            <td class="teco-native-number">-</td>
+            <td class="teco-native-number">-</td>
+            <td class="teco-native-number">-</td>
+            <td><span class="teco-native-hpp-status missing">HPP belum dibuat</span></td>
+          `
+        : '';
+
+      return `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(product.name)}</td>
+          <td class="teco-native-number">${formatQuantity(product.qty)}</td>
+          <td class="teco-native-number">${formatMoney(product.revenue)}</td>
+          <td>${escapeHtml(recipeNameForProduct(product.name, product.recipeKey))}</td>
+          ${profitCells}
+        </tr>
+      `;
+    }).join('');
   }
 
   function materialRows(materials) {
@@ -1337,6 +1657,25 @@
         <td class="teco-native-number">${formatQuantity(material.qty)}</td>
         <td>${escapeHtml(material.unit)}</td>
         <td>${escapeHtml(material.products.join(', '))}</td>
+      </tr>
+    `).join('');
+  }
+
+  function hppMaterialRows(materials) {
+    if (!materials.length) {
+      return '<tr><td colspan="8" class="teco-native-empty">Belum ada biaya bahan HPP yang dapat dihitung.</td></tr>';
+    }
+
+    return materials.map((material, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(material.material)}</td>
+        <td class="teco-native-number">${formatQuantity(material.qty)}</td>
+        <td>${escapeHtml(material.unit)}</td>
+        <td class="teco-native-number">${formatMoney(material.averageUnitPrice)}</td>
+        <td class="teco-native-number">${formatMoney(material.totalCost)}</td>
+        <td>${escapeHtml(material.products.join(', '))}</td>
+        <td><span class="teco-native-hpp-status ${material.hasMissingPrice ? 'warning' : 'complete'}">${material.hasMissingPrice ? 'Harga belum lengkap' : 'Lengkap'}</span></td>
       </tr>
     `).join('');
   }
@@ -1445,6 +1784,9 @@
     const revenue = rawRevenue + adjustment.revenue;
     const totalExpenses = rawExpenses + adjustment.expense;
     const totalCups = rawCups + adjustment.cup;
+    const profitAnalysis = isAdmin()
+      ? aggregateHppProfit(products, root, adjustment, totalExpenses)
+      : null;
     const notes = Array.from(new Set(
       transactions.map((transaction) => canonical(transaction.note)).filter(Boolean)
     ));
@@ -1470,6 +1812,7 @@
       totalExpenses,
       netBalance: revenue - totalExpenses,
       totalCups,
+      profitAnalysis,
       root
     };
   }
@@ -1494,10 +1837,27 @@
       `Jumlah varian: *${report.products.length}*`,
       `Omzet kotor: *${formatMoney(report.revenue)}*`,
       `Total pengeluaran: *${formatMoney(report.totalExpenses)}*`,
-      `Saldo bersih: *${formatMoney(report.netBalance)}*`,
-      '',
-      '*TIPE PEMBAYARAN*'
+      `Saldo bersih: *${formatMoney(report.netBalance)}*`
     ];
+
+    if (report.profitAnalysis) {
+      const profit = report.profitAnalysis;
+      lines.push(
+        '',
+        '*ANALISA HPP — KHUSUS ADMIN*',
+        `Omzet produk dasar margin: *${formatMoney(profit.adjustedMarginRevenue)}*`,
+        `Total HPP tercatat: *${formatMoney(profit.totalHpp)}*`,
+        `Estimasi laba kotor: *${formatMoney(profit.estimatedGrossProfit)}*`,
+        `Estimasi margin kotor: *${formatPercent(profit.grossMarginPct)}*`,
+        `Estimasi laba setelah pengeluaran: *${formatMoney(profit.estimatedProfitAfterExpenses)}*`,
+        `Cakupan HPP lengkap: *${formatPercent(profit.coveragePct)}*`
+      );
+      if (!profit.isComplete) {
+        lines.push('Catatan: estimasi belum final karena ada HPP/harga bahan yang belum lengkap atau penyesuaian cup belum dialokasikan.');
+      }
+    }
+
+    lines.push('', '*TIPE PEMBAYARAN*');
 
     if (report.payments.length) {
       report.payments.forEach((payment) => {
@@ -1662,12 +2022,52 @@
       ['Jumlah Catatan', report.notes.length]
     ];
 
-    const variants = [['No', 'Varian', 'Total_Cup', 'Omzet_Item', 'Resep', 'Sumber_Varian']];
-    report.products.forEach((product, index) => variants.push([
-      index + 1, product.name, product.qty, product.revenue,
-      recipeNameForProduct(product.name, product.recipeKey),
-      (product.sourceNames || []).join(', ')
-    ]));
+    if (report.profitAnalysis) {
+      const profit = report.profitAnalysis;
+      summary.push(
+        ['Omzet Produk Dasar Margin', profit.adjustedMarginRevenue],
+        ['Total HPP Tercatat', profit.totalHpp],
+        ['Estimasi Laba Kotor', profit.estimatedGrossProfit],
+        ['Estimasi Margin Kotor (%)', profit.grossMarginPct],
+        ['Estimasi Laba Setelah Pengeluaran', profit.estimatedProfitAfterExpenses],
+        ['Estimasi Margin Setelah Pengeluaran (%)', profit.profitAfterExpensesPct],
+        ['Rata-rata HPP per Cup Terpetakan', profit.averageHppPerCup],
+        ['Cakupan HPP Lengkap (%)', profit.coveragePct],
+        ['Cup dengan Resep HPP', profit.matchedCups],
+        ['Cup dengan Harga HPP Lengkap', profit.costedCups],
+        ['Produk Belum Memiliki HPP', profit.missingProducts.length],
+        ['Produk dengan Harga Bahan Belum Lengkap', profit.incompletePriceProducts.length],
+        ['Status Analisa HPP', profit.isComplete ? 'Lengkap' : 'Estimasi / belum lengkap']
+      );
+    }
+
+    const profitMap = new Map(
+      (report.profitAnalysis && report.profitAnalysis.products || []).map((row) => [row.key, row])
+    );
+    const variants = [[
+      'No', 'Varian', 'Total_Cup', 'Omzet_Item', 'Resep', 'Sumber_Varian',
+      ...(report.profitAnalysis
+        ? ['HPP_Per_Cup', 'Total_HPP', 'Laba_Kotor', 'Margin_Kotor_Persen', 'Status_HPP']
+        : [])
+    ]];
+    report.products.forEach((product, index) => {
+      const row = [
+        index + 1, product.name, product.qty, product.revenue,
+        recipeNameForProduct(product.name, product.recipeKey),
+        (product.sourceNames || []).join(', ')
+      ];
+      if (report.profitAnalysis) {
+        const profit = profitMap.get(product.key || keyText(product.name));
+        row.push(
+          profit && profit.hppPerCup !== null ? profit.hppPerCup : '',
+          profit && profit.totalHpp !== null ? profit.totalHpp : '',
+          profit && profit.grossProfit !== null ? profit.grossProfit : '',
+          profit && profit.marginPct !== null ? profit.marginPct : '',
+          profit ? profit.status : 'HPP belum dibuat'
+        );
+      }
+      variants.push(row);
+    });
 
     const materials = [['No', 'Bahan', 'Jumlah', 'Satuan', 'Tampilan', 'Jenis', 'Dipakai_Oleh']];
     let materialNo = 0;
@@ -1716,7 +2116,7 @@
       row.expenseDelta, row.note, row.updatedBy
     ]));
 
-    return {
+    const sheets = {
       [`Ringkasan ${suffix}`]: summary,
       [`Varian ${suffix}`]: variants,
       [`Bahan ${suffix}`]: materials,
@@ -1725,6 +2125,39 @@
       [`Pengeluaran ${suffix}`]: expenses,
       [`Pembayaran ${suffix}`]: payments
     };
+
+    if (report.profitAnalysis) {
+      const profit = report.profitAnalysis;
+      const hppProducts = [[
+        'No', 'Produk_Varian', 'Cup', 'Omzet_Item', 'Harga_Jual_Rata-rata',
+        'Resep_HPP', 'Varian_HPP', 'HPP_Per_Cup', 'Total_HPP',
+        'Laba_Kotor', 'Margin_Kotor_Persen', 'Status', 'Terakhir_Diubah'
+      ]];
+      profit.products.forEach((row, index) => hppProducts.push([
+        index + 1, row.name, row.qty, row.revenue, row.averageSellingPrice,
+        row.recipeName, row.recipeVariant,
+        row.hppPerCup === null ? '' : row.hppPerCup,
+        row.totalHpp === null ? '' : row.totalHpp,
+        row.grossProfit === null ? '' : row.grossProfit,
+        row.marginPct === null ? '' : row.marginPct,
+        row.status, row.updatedAt || ''
+      ]));
+
+      const hppMaterials = [[
+        'No', 'Bahan', 'Total_Pemakaian', 'Satuan', 'Harga_Rata-rata_Per_Satuan',
+        'Total_Biaya', 'Dipakai_Oleh', 'Resep_HPP', 'Status_Harga'
+      ]];
+      profit.materials.forEach((row, index) => hppMaterials.push([
+        index + 1, row.material, row.qty, row.unit, row.averageUnitPrice,
+        row.totalCost, row.products.join(', '), row.recipes.join(', '),
+        row.hasMissingPrice ? 'Harga belum lengkap' : 'Lengkap'
+      ]));
+
+      sheets[`Analisa HPP ${suffix}`] = hppProducts;
+      sheets[`Biaya HPP ${suffix}`] = hppMaterials;
+    }
+
+    return sheets;
   }
 
   function mappingSheet(reports) {
@@ -1754,8 +2187,10 @@
   function buildWorkbookSheets(reports) {
     const sheets = {};
     reports.forEach((report) => Object.assign(sheets, reportSheets(report)));
-    sheets['Mapping Produk'] = mappingSheet(reports);
-    sheets['Master Resep'] = masterRecipeSheet();
+    if (isAdmin()) {
+      sheets['Mapping Produk'] = mappingSheet(reports);
+      sheets['Master Resep'] = masterRecipeSheet();
+    }
     return sheets;
   }
 
@@ -2201,6 +2636,7 @@
     const expensesTotal = report.totalExpenses;
     const netBalance = report.netBalance;
     const cups = report.totalCups;
+    const profitAnalysis = report.profitAnalysis;
     const activePeriod = state.mode === 'daily' ? state.date : state.mode === 'weekly' ? state.weekDate : state.month;
 
     const latestInfo = allTransactions.length
@@ -2267,10 +2703,57 @@
         <article><span>Saldo bersih</span><strong>${formatMoney(netBalance)}</strong></article>
       </div>
 
+      ${profitAnalysis ? `
+        <section class="teco-native-profit-summary">
+          <div class="teco-native-profit-title">
+            <div>
+              <h4>Analisa HPP & Margin — Khusus Admin</h4>
+              <p>Otomatis memakai HPP produk yang tersimpan dan tersinkron pada data POS.</p>
+            </div>
+            <span class="teco-native-hpp-status ${profitAnalysis.isComplete ? 'complete' : 'warning'}">${profitAnalysis.isComplete ? 'Data lengkap' : 'Masih estimasi'}</span>
+          </div>
+          <div class="teco-native-profit-cards">
+            <article><span>Omzet Produk</span><strong>${formatMoney(profitAnalysis.adjustedMarginRevenue)}</strong></article>
+            <article><span>Total HPP</span><strong>${formatMoney(profitAnalysis.totalHpp)}</strong></article>
+            <article><span>Estimasi Laba Kotor</span><strong>${formatMoney(profitAnalysis.estimatedGrossProfit)}</strong></article>
+            <article><span>Margin Kotor</span><strong>${formatPercent(profitAnalysis.grossMarginPct)}</strong></article>
+            <article><span>Laba Setelah Pengeluaran</span><strong>${formatMoney(profitAnalysis.estimatedProfitAfterExpenses)}</strong></article>
+            <article><span>Cakupan HPP Lengkap</span><strong>${formatPercent(profitAnalysis.coveragePct)}</strong></article>
+            <article><span>Rata-rata HPP / Cup</span><strong>${formatMoney(profitAnalysis.averageHppPerCup)}</strong></article>
+            <article><span>Resep HPP Tersimpan</span><strong>${profitAnalysis.recipesCount}</strong></article>
+          </div>
+        </section>
+      ` : ''}
+
       ${materialResult.unmapped.length ? `
         <div class="teco-native-warning">
           Resep belum dipetakan untuk: ${escapeHtml(materialResult.unmapped.join(', '))}.
           Cup dan tutup tetap dihitung.
+        </div>
+      ` : ''}
+
+      ${profitAnalysis && !profitAnalysis.recipesCount ? `
+        <div class="teco-native-warning">
+          Belum ada HPP tersimpan. Buka <strong>Panel Admin → Analisa HPP Produk</strong>, isi harga bahan, lalu simpan setiap varian.
+        </div>
+      ` : ''}
+
+      ${profitAnalysis && profitAnalysis.missingProducts.length ? `
+        <div class="teco-native-warning">
+          HPP belum dibuat untuk: ${escapeHtml(profitAnalysis.missingProducts.join(', '))}.
+          Nilai laba dan margin masih lebih tinggi dari kondisi sebenarnya sampai HPP dilengkapi.
+        </div>
+      ` : ''}
+
+      ${profitAnalysis && profitAnalysis.incompletePriceProducts.length ? `
+        <div class="teco-native-warning">
+          Harga bahan belum lengkap untuk: ${escapeHtml(profitAnalysis.incompletePriceProducts.join(', '))}.
+        </div>
+      ` : ''}
+
+      ${profitAnalysis && profitAnalysis.hasCupAdjustment ? `
+        <div class="teco-native-warning">
+          Ada penyesuaian jumlah cup yang tidak memiliki rincian varian. Biaya HPP untuk penyesuaian tersebut belum dapat dialokasikan otomatis.
         </div>
       ` : ''}
 
@@ -2279,8 +2762,8 @@
           <h4>Rekap Cup & Varian Terjual</h4>
           <div class="teco-native-table-wrap">
             <table>
-              <thead><tr><th>No.</th><th>Varian</th><th>Cup</th><th>Omzet Item</th><th>Resep</th></tr></thead>
-              <tbody>${productRows(products)}</tbody>
+              <thead><tr><th>No.</th><th>Varian</th><th>Cup</th><th>Omzet Item</th><th>Resep</th>${profitAnalysis ? '<th>HPP / Cup</th><th>Total HPP</th><th>Laba Kotor</th><th>Margin</th><th>Status HPP</th>' : ''}</tr></thead>
+              <tbody>${productRows(products, profitAnalysis)}</tbody>
             </table>
           </div>
         </section>
@@ -2295,6 +2778,21 @@
           </div>
         </section>
       </div>
+
+      ${profitAnalysis ? `
+        <section class="teco-native-panel teco-native-hpp-materials">
+          <div class="teco-native-panel-title">
+            <h4>Biaya Bahan Berdasarkan HPP</h4>
+            <span class="teco-native-panel-note">Total biaya: ${formatMoney(profitAnalysis.totalHpp)}</span>
+          </div>
+          <div class="teco-native-table-wrap">
+            <table>
+              <thead><tr><th>No.</th><th>Bahan</th><th>Total Pemakaian</th><th>Satuan</th><th>Harga / Satuan</th><th>Total Biaya</th><th>Dipakai oleh</th><th>Status</th></tr></thead>
+              <tbody>${hppMaterialRows(profitAnalysis.materials)}</tbody>
+            </table>
+          </div>
+        </section>
+      ` : ''}
 
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>

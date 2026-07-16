@@ -1,8 +1,8 @@
-/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.1.0 */
+/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.2.0 */
 (function () {
   'use strict';
 
-  const VERSION = '3.1.0';
+  const VERSION = '3.2.0';
   const PRIMARY_KEY = 'teco_pos_data';
   const EMERGENCY_KEY = 'teco_pos_emergency_backup_v3';
   const DEVICE_KEY = 'teco_pos_device_id_v3';
@@ -10,7 +10,7 @@
   const STORE_NAME = 'snapshots';
   const CLOUD_BACKUP_PATH = 'teco_pos_backups/teco-pandawa-main';
   const KNOWN_KEYS = new Set([
-    'schemaVersion', 'transactions', 'expenses', 'stockNotes', 'menu', 'users',
+    'schemaVersion', 'transactions', 'expenses', 'stockNotes', 'hppData', 'menu', 'users',
     'settings', 'syncMeta', 'updatedAt', 'updatedBy', 'deviceId'
   ]);
 
@@ -141,6 +141,69 @@
     return JSON.stringify(b).length >= JSON.stringify(a).length ? b : a;
   }
 
+  function hppRecipeKey(recipe, fallback) {
+    recipe = recipe && typeof recipe === 'object' ? recipe : {};
+    return String(
+      recipe.key
+      || fallback
+      || `${recipe.productId || recipe.productName || 'produk'}::${recipe.variant || 'Tanpa varian'}`
+    );
+  }
+
+  function normalizeHppData(value) {
+    const raw = value && typeof value === 'object' ? clone(value) : {};
+    const source = raw.recipes && typeof raw.recipes === 'object' ? raw.recipes : {};
+    const recipes = {};
+    Object.entries(source).forEach(([key, recipe]) => {
+      if (!recipe || typeof recipe !== 'object') return;
+      const normalizedKey = hppRecipeKey(recipe, key);
+      recipes[normalizedKey] = { ...clone(recipe), key: normalizedKey };
+    });
+    return {
+      version: Math.max(2, Number(raw.version) || 0),
+      recipes,
+      deletedRecipes: raw.deletedRecipes && typeof raw.deletedRecipes === 'object'
+        ? clone(raw.deletedRecipes)
+        : {}
+    };
+  }
+
+  function tombstoneTime(value) {
+    const raw = value && typeof value === 'object'
+      ? (value.updatedAt || value.deletedAt || value.date)
+      : value;
+    const time = Date.parse(raw || 0);
+    return Number.isFinite(time) ? time : 0;
+  }
+
+  function mergeHppData(localValue, remoteValue) {
+    const local = normalizeHppData(localValue);
+    const remote = normalizeHppData(remoteValue);
+    const recipes = {};
+    Object.entries(remote.recipes).forEach(([key, recipe]) => { recipes[key] = clone(recipe); });
+    Object.entries(local.recipes).forEach(([key, recipe]) => {
+      recipes[key] = preferRecord(recipes[key], recipe);
+    });
+
+    const deletedRecipes = { ...remote.deletedRecipes };
+    Object.entries(local.deletedRecipes).forEach(([key, tombstone]) => {
+      if (tombstoneTime(tombstone) >= tombstoneTime(deletedRecipes[key])) {
+        deletedRecipes[key] = clone(tombstone);
+      }
+    });
+
+    Object.entries(recipes).forEach(([key, recipe]) => {
+      if (
+        Object.prototype.hasOwnProperty.call(deletedRecipes, key)
+        && tombstoneTime(deletedRecipes[key]) >= recordTime(recipe)
+      ) {
+        delete recipes[key];
+      }
+    });
+
+    return { version: 2, recipes, deletedRecipes };
+  }
+
   function mergeTombstones(a, b) {
     return { ...(a || {}), ...(b || {}) };
   }
@@ -208,6 +271,7 @@
       transactions: mergeRecords(local.transactions, remote.transactions, 'TX', 'transaction', syncMeta.deletedTransactions),
       expenses: mergeRecords(local.expenses, remote.expenses, 'EXP', 'expense', syncMeta.deletedExpenses),
       stockNotes: mergeRecords(local.stockNotes, remote.stockNotes, 'STK', 'stock', syncMeta.deletedStockNotes),
+      hppData: mergeHppData(local.hppData, remote.hppData),
       menu: mergeMenu(local.menu, remote.menu),
       users: { ...(fallback.users || {}), ...(preferred.users || {}) },
       settings: { ...(fallback.settings || {}), ...(preferred.settings || {}) },
@@ -239,6 +303,7 @@
       transactions: ensureRecordIds(sanitizeTransactions(state.transactions || []), 'TX', 'transaction'),
       expenses: ensureRecordIds(state.expenses || [], 'EXP', 'expense'),
       stockNotes: ensureRecordIds(state.stockNotes || [], 'STK', 'stock'),
+      hppData: normalizeHppData(state.hppData || existing.hppData),
       menu: sanitizeMenu(state.menu || []),
       users: state.users || {},
       settings: state.settings || {},
@@ -257,6 +322,7 @@
     state.transactions = ensureRecordIds(payload.transactions, 'TX', 'transaction');
     state.expenses = ensureRecordIds(payload.expenses, 'EXP', 'expense');
     state.stockNotes = ensureRecordIds(payload.stockNotes, 'STK', 'stock');
+    state.hppData = normalizeHppData(payload.hppData);
     state.menu = asList(payload.menu);
     state.users = payload.users && typeof payload.users === 'object' ? payload.users : {};
     state.settings = { ...state.settings, ...(payload.settings || {}) };
@@ -784,7 +850,7 @@
     if (info) info.textContent = `Penyimpanan lokal: ${Math.round(afterBytes / 1024)} KB`;
     showToast(`Penyimpanan dibersihkan${freedKb ? ` · hemat ${freedKb} KB` : ''}.`);
     scheduleCloudPush(100);
-    console.info('[Te.Co v3.1] Storage cleanup', { removed, beforeBytes, afterBytes });
+    console.info(`[Te.Co v${VERSION}] Storage cleanup`, { removed, beforeBytes, afterBytes });
     return true;
   }
 
@@ -827,7 +893,7 @@
     const month = document.getElementById('exportMonth');
     if (month && !month.value) month.value = new Date().toISOString().slice(0, 7);
     const version = document.querySelector('.version-tag');
-    if (version) version.textContent = 'v3.1.0 · Cloud-safe · Storage-safe';
+    if (version) version.textContent = 'v3.2.0 · HPP-sync · Cloud-safe';
     const storageInfo = document.getElementById('syncStorageStats');
     if (storageInfo) {
       const bytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;
@@ -861,6 +927,7 @@
     backupCloud: backupCloudNow,
     exportBackup: exportJsonBackup,
     mergePayloads,
+    mergeHppData,
     cleanupStorage: () => {
       const removed = cleanupAuxiliaryStorage();
       const current = readPrimary();

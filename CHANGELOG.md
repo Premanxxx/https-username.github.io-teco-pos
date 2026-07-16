@@ -1,3 +1,15 @@
+# v3.2.0 — 16 Juli 2026
+
+- Menghubungkan data resep HPP secara otomatis ke laporan Rekap Cup & Bahan.
+- Menambahkan ringkasan admin: omzet produk, total HPP, laba kotor, margin kotor, laba setelah pengeluaran, rata-rata HPP per cup, dan cakupan HPP.
+- Menambahkan HPP per cup, total HPP, laba, dan margin pada rekap produk/varian khusus Admin.
+- Menambahkan tabel biaya bahan berdasarkan HPP periode laporan.
+- Menambahkan peringatan resep HPP belum tersedia dan harga bahan belum lengkap.
+- Menambahkan analisa HPP ke laporan WhatsApp dan sheet Excel khusus Admin.
+- Memperbaiki sinkronisasi `hppData` agar resep dari beberapa perangkat digabung berdasarkan `updatedAt`.
+- Menambahkan tombstone penghapusan resep agar data HPP lama dari cloud tidak muncul kembali.
+- Mengarahkan server lokal ke `index.html` agar memakai jalur aplikasi utama yang mendukung sinkronisasi cloud.
+
 # v3.1.0
 
 - Memperbaiki notifikasi penyimpanan penuh akibat gambar base64 tersalin ke setiap item transaksi.
