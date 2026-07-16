@@ -1,4 +1,8 @@
-# Te.Co Pandawa POS v3.3.0
+# Te.Co Pandawa POS v3.3.1
+
+Pembaruan v3.3.1 memperbaiki tampilan tab **Laporan & Analisis**. Komponen laporan kini dipasang sebagai konten penuh halaman, bukan di dalam header flex. Stylesheet laporan juga ditautkan langsung pada seluruh halaman aplikasi sehingga kartu ringkasan, toolbar, tabel, status HPP, dan panel Admin tampil konsisten di desktop maupun ponsel.
+
+Pada layar kecil, filter dan tombol aksi tersusun dua kolom, kartu ringkasan tetap terbaca, serta setiap tabel menampilkan petunjuk geser horizontal. Logika HPP, harga dasar bahan, margin, sinkronisasi Firebase, dan pembatasan akses Admin tetap sama seperti v3.3.0.
 
 Versi ini menambahkan **Master Harga Dasar Bahan** khusus Admin. Harga beli dan isi kemasan bahan seperti Air, Es Batu, Cup, UHT, sirup, gula, krimer, bubuk, dan bahan lain diubah otomatis menjadi harga dasar per `ml`, `gr`, `pcs`, atau satuan lain.
 

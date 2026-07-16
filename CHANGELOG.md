@@ -1,3 +1,15 @@
+# v3.3.1 — 16 Juli 2026
+
+- Memperbaiki pemasangan komponen laporan yang sebelumnya masuk ke dalam `.page-header` dan terjepit oleh layout flex.
+- Menambahkan selector halaman `#pageReports` agar tab laporan utama ditemukan secara langsung.
+- Menautkan `teco-native-main-style.css` pada `index.html`, `index (2).html`, dan `pos_app_pwa.html`.
+- Memperbaiki `server.js` agar file CSS dengan query cache-busting `?v=3.3.1` tetap dilayani dengan benar.
+- Merapikan kartu ringkasan, toolbar filter, tombol ekspor, panel HPP, status harga, peringatan, dan tabel laporan.
+- Memperbaiki konflik media query yang membuat kartu ringkasan ponsel menjadi tiga kolom sempit.
+- Menetapkan layout dua kolom untuk kartu dan kontrol di ponsel, beserta petunjuk geser pada tabel lebar.
+- Menambahkan sticky header tabel, zebra row, scrollbar yang lebih jelas, focus state, dan dukungan dark mode tambahan.
+- Mempertahankan seluruh logika HPP, harga dasar bahan, margin, ekspor, sinkronisasi, dan pembatasan akses Admin dari v3.3.0.
+
 # v3.3.0 — 16 Juli 2026
 
 - Menambahkan Master Harga Dasar Bahan khusus Admin.

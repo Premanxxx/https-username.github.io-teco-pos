@@ -1,4 +1,4 @@
-# Hasil Validasi Te.Co Pandawa POS v3.3.0
+# Hasil Validasi Te.Co Pandawa POS v3.3.1
 
 Tanggal: 2026-07-16
 
@@ -8,6 +8,16 @@ Tanggal: 2026-07-16
 - `teco-reliability-v3.js`: lolos `node --check`.
 - `server.js`: lolos `node --check`.
 - Seluruh skrip inline pada `index.html`, `index (2).html`, `pos_app_pwa.html`, dan `analytics.html`: valid.
+
+
+## Uji Tampilan Tab Laporan
+
+- `#teco-native-report` terpasang langsung di dalam halaman laporan, bukan sebagai anak `.page-header`.
+- Stylesheet laporan aktif pada seluruh entry point HTML.
+- Lebar laporan desktop mengikuti lebar konten halaman dan tidak lagi terjepit di sisi kanan.
+- Tampilan ponsel memakai dua kolom untuk kartu dan kontrol, bukan tiga kolom sempit.
+- Tabel lebar tetap dapat digeser horizontal dan menampilkan petunjuk geser.
+- Pengujian Chromium desktop 1440 px dan ponsel 390 px lulus.
 
 ## Uji Harga Dasar dan Biaya Komposisi
 
@@ -35,7 +45,7 @@ Pengujian Chromium berbasis injeksi dokumen berhasil memverifikasi:
 
 ## Uji Server Lokal
 
-`server.js` diuji pada port alternatif. Permintaan ke `/` mengembalikan `index.html` dengan status HTTP 200.
+`server.js` diuji pada port alternatif. Permintaan ke `/` dan `teco-native-main-style.css?v=3.3.1` sama-sama mengembalikan status HTTP 200.
 
 ## Batas Validasi
 

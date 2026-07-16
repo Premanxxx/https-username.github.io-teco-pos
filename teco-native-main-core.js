@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.3.0';
+  const VERSION = '3.3.1';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -1599,6 +1599,7 @@
     const selectors = [
       '#page-laporan',
       '#page-reports',
+      '#pageReports',
       '#reportsPage',
       '#reportPage',
       '#reports',
@@ -1658,16 +1659,26 @@
 
     let root = document.getElementById('teco-native-report');
 
+    const heading = Array.from(host.querySelectorAll('h1, h2, h3, .page-title'))
+      .find((element) => /Laporan\s*&\s*Analisis/i.test(element.textContent || ''));
+    const pageHeader = heading && heading.closest('.page-header');
+
     if (!root) {
       root = document.createElement('section');
       root.id = 'teco-native-report';
       root.className = 'teco-native-report';
+    }
 
-      const heading = Array.from(host.querySelectorAll('h1, h2, h3, .page-title'))
-        .find((element) => /Laporan\s*&\s*Analisis/i.test(element.textContent || ''));
-
-      if (heading) heading.insertAdjacentElement('afterend', root);
-      else host.prepend(root);
+    // Jangan menaruh laporan di dalam .page-header yang memakai flex.
+    // Pada versi sebelumnya hal ini membuat seluruh laporan terjepit di sisi kanan.
+    if (pageHeader && pageHeader.parentElement === host) {
+      if (root.parentElement !== host || root !== host.lastElementChild) {
+        host.appendChild(root);
+      }
+    } else if (heading && root.parentElement !== heading.parentElement) {
+      heading.insertAdjacentElement('afterend', root);
+    } else if (!root.parentElement) {
+      host.prepend(root);
     }
 
     hideLegacyAnalyticsLaunchers();
