@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '3.3.1';
+  const VERSION = '3.3.2';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = __TECO_RECIPE_JSON__;
@@ -756,7 +756,25 @@
     ]) || 'Lain-lain');
 
     const note = canonical(first(raw, NOTE_KEYS) || category);
-    const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${amount}-${category}`);
+    const itemName = canonical(first(raw, [
+      'itemName', 'item_name', 'namaItem', 'nama_item', 'material', 'bahan', 'ingredient'
+    ]) || note || category);
+    const itemQty = Math.max(0, toNumber(first(raw, [
+      'itemQty', 'item_qty', 'volumePerItem', 'volume_per_item', 'isiPerItem', 'isi_per_item'
+    ])) || 1);
+    const itemUnit = canonical(first(raw, [
+      'itemUnit', 'item_unit', 'volumeUnit', 'volume_unit', 'satuanIsi', 'satuan_isi', 'unit'
+    ]) || 'pcs').toLowerCase();
+    const packageQty = Math.max(0, toNumber(first(raw, [
+      'packageQty', 'package_qty', 'jumlahItem', 'jumlah_item', 'jumlahKemasan', 'jumlah_kemasan'
+    ])) || 1);
+    const packageUnit = canonical(first(raw, [
+      'packageUnit', 'package_unit', 'satuanJumlah', 'satuan_jumlah', 'satuanKemasan', 'satuan_kemasan'
+    ]) || 'pcs').toLowerCase();
+    const totalQty = Math.max(0, toNumber(first(raw, [
+      'totalQty', 'total_qty', 'totalVolume', 'total_volume'
+    ])) || (itemQty * packageQty));
+    const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${amount}-${category}-${itemName}`);
 
     return {
       id,
@@ -764,6 +782,12 @@
       amount,
       cashier: canonical(cashier || 'Tidak diketahui'),
       category,
+      itemName,
+      itemQty,
+      itemUnit,
+      packageQty,
+      packageUnit,
+      totalQty,
       note,
       raw
     };
@@ -820,6 +844,9 @@
         cashierKey(expense.cashier),
         Math.round(expense.amount),
         keyText(expense.category),
+        keyText(expense.itemName),
+        Math.round(expense.totalQty * 1000),
+        keyText(expense.itemUnit),
         keyText(expense.note)
       ].join('::');
       if (!map.has(signature)) map.set(signature, expense);
@@ -1819,6 +1846,56 @@
       return periodMatch && cashierMatch;
     });
   }
+
+  function expenseQuantityText(value, unit) {
+    const qty = toNumber(value);
+    const normalized = canonical(unit || 'pcs').toLowerCase();
+    let text = `${formatQuantity(qty)} ${normalized}`;
+    if (normalized === 'ml' && qty >= 1000) text += ` (${formatQuantity(qty / 1000)} liter)`;
+    if (normalized === 'gr' && qty >= 1000) text += ` (${formatQuantity(qty / 1000)} kg)`;
+    return text;
+  }
+
+  function aggregateExpenseItems(expenses) {
+    const map = new Map();
+    expenses.forEach((expense) => {
+      const category = canonical(expense.category || 'Lain-lain');
+      const itemName = canonical(expense.itemName || expense.note || category);
+      const itemUnit = canonical(expense.itemUnit || 'pcs').toLowerCase();
+      const packageUnit = canonical(expense.packageUnit || 'pcs').toLowerCase();
+      const key = [category, itemName, itemUnit, packageUnit].map(keyText).join('::');
+      if (!map.has(key)) map.set(key, {
+        key, category, itemName, itemUnit, packageUnit,
+        packageQty: 0, totalQty: 0, amount: 0, entries: 0,
+        sizes: new Set(), notes: new Set()
+      });
+      const row = map.get(key);
+      row.packageQty += toNumber(expense.packageQty) || 1;
+      row.totalQty += toNumber(expense.totalQty) || ((toNumber(expense.itemQty) || 1) * (toNumber(expense.packageQty) || 1));
+      row.amount += toNumber(expense.amount);
+      row.entries += 1;
+      row.sizes.add(`${formatQuantity(toNumber(expense.itemQty) || 1)} ${itemUnit}`);
+      if (expense.note && expense.note !== '-') row.notes.add(expense.note);
+    });
+    return Array.from(map.values()).map((row) => ({
+      ...row,
+      sizes: Array.from(row.sizes),
+      notes: Array.from(row.notes),
+      averageUnitPrice: row.totalQty > 0 ? row.amount / row.totalQty : 0
+    })).sort((a, b) => a.category.localeCompare(b.category, 'id') || a.itemName.localeCompare(b.itemName, 'id'));
+  }
+
+  function aggregateExpenseCategories(items) {
+    const map = new Map();
+    items.forEach((item) => {
+      if (!map.has(item.category)) map.set(item.category, { category: item.category, itemCount: 0, entries: 0, amount: 0 });
+      const row = map.get(item.category);
+      row.itemCount += 1;
+      row.entries += item.entries;
+      row.amount += item.amount;
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category, 'id'));
+  }
   function formatPeriodLabel(mode, period) {
     if (mode === 'daily') {
       const date = dateFromKey(period);
@@ -1906,6 +1983,8 @@
     });
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
+    const expenseItems = aggregateExpenseItems(expenses);
+    const expenseCategories = aggregateExpenseCategories(expenseItems);
     const products = aggregateProducts(transactions);
     const materials = aggregateMaterials(products, root);
     const adjustments = reportAdjustments(mode, period, cashier);
@@ -1931,6 +2010,8 @@
       cashierLabel: cashier === 'ALL' ? 'Semua Kasir' : cashier,
       transactions,
       expenses,
+      expenseItems,
+      expenseCategories,
       products,
       materials,
       payments: aggregatePayments(transactions),
@@ -2001,10 +2082,18 @@
       lines.push('• Tidak ada pembayaran pada periode ini');
     }
 
-    lines.push('', '*LAPORAN PENGELUARAN*');
-    if (report.expenses.length) {
-      report.expenses.forEach((expense) => {
-        lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note || '-'}`);
+    lines.push('', '*LAPORAN PENGELUARAN PER KLASIFIKASI & ITEM*');
+    if (report.expenseItems.length) {
+      let activeCategory = '';
+      report.expenseItems.forEach((item) => {
+        if (item.category !== activeCategory) {
+          lines.push(`_${item.category}_`);
+          activeCategory = item.category;
+        }
+        lines.push(
+          `• ${item.itemName}: ${expenseQuantityText(item.totalQty, item.itemUnit)} ` +
+          `(${formatQuantity(item.packageQty)} ${item.packageUnit}) — *${formatMoney(item.amount)}*`
+        );
       });
     } else {
       lines.push('• Tidak ada pengeluaran pada periode ini');
@@ -2255,10 +2344,32 @@
       ]));
     });
 
-    const expenses = [['Tanggal', 'Waktu', 'ID_Pengeluaran', 'Kasir', 'Kategori', 'Catatan', 'Nominal']];
+    const expenses = [[
+      'Tanggal', 'Waktu', 'ID_Pengeluaran', 'Kasir', 'Klasifikasi', 'Item_Bahan',
+      'Isi_Per_Item', 'Satuan_Isi', 'Jumlah_Item', 'Satuan_Jumlah',
+      'Total_Volume', 'Catatan', 'Nominal'
+    ]];
     report.expenses.forEach((expense) => expenses.push([
       dateKey(expense.date), timeText(expense.date), expense.id,
-      expense.cashier, expense.category, expense.note, expense.amount
+      expense.cashier, expense.category, expense.itemName,
+      expense.itemQty, expense.itemUnit, expense.packageQty, expense.packageUnit,
+      expense.totalQty, expense.note, expense.amount
+    ]));
+
+    const expenseCategories = [['No', 'Klasifikasi', 'Jumlah_Item_Berbeda', 'Jumlah_Pembelian', 'Total_Harga']];
+    report.expenseCategories.forEach((row, index) => expenseCategories.push([
+      index + 1, row.category, row.itemCount, row.entries, row.amount
+    ]));
+
+    const expenseItems = [[
+      'No', 'Klasifikasi', 'Item_Bahan', 'Variasi_Isi_Per_Item',
+      'Jumlah_Item', 'Satuan_Jumlah', 'Total_Volume', 'Satuan_Volume',
+      'Total_Harga', 'Harga_Rata_Rata_Per_Satuan', 'Jumlah_Pembelian', 'Catatan'
+    ]];
+    report.expenseItems.forEach((row, index) => expenseItems.push([
+      index + 1, row.category, row.itemName, row.sizes.join('; '),
+      row.packageQty, row.packageUnit, row.totalQty, row.itemUnit,
+      row.amount, row.averageUnitPrice, row.entries, row.notes.join('; ')
     ]));
 
     const payments = [['No', 'Tipe_Pembayaran', 'Jumlah_Transaksi', 'Nominal']];
@@ -2279,6 +2390,8 @@
       [`Penyesuaian ${suffix}`]: adjustments,
       [`Transaksi ${suffix}`]: transactions,
       [`Pengeluaran ${suffix}`]: expenses,
+      [`Rekap Klasifikasi ${suffix}`]: expenseCategories,
+      [`Rekap Item Bahan ${suffix}`]: expenseItems,
       [`Pembayaran ${suffix}`]: payments
     };
 
@@ -2505,6 +2618,44 @@
 
   function exportCurrent() {
     exportActiveSheets();
+  }
+
+  function expenseCategoryRows(rows) {
+    if (!rows.length) return '<tr><td colspan="5" class="teco-native-empty">Tidak ada klasifikasi pengeluaran pada periode ini.</td></tr>';
+    return rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td class="teco-native-number">${formatQuantity(row.itemCount)}</td>
+        <td class="teco-native-number">${formatQuantity(row.entries)}</td>
+        <td class="teco-native-number">${formatMoney(row.amount)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function expenseItemRows(rows) {
+    if (!rows.length) return '<tr><td colspan="10" class="teco-native-empty">Tidak ada item pengeluaran pada periode ini.</td></tr>';
+    let activeCategory = '';
+    return rows.map((row, index) => {
+      const group = row.category !== activeCategory
+        ? `<tr><td colspan="10"><strong>${escapeHtml(row.category)}</strong></td></tr>`
+        : '';
+      activeCategory = row.category;
+      return group + `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(row.itemName)}</td>
+          <td>${escapeHtml(row.sizes.join(', '))}</td>
+          <td class="teco-native-number">${formatQuantity(row.packageQty)}</td>
+          <td>${escapeHtml(row.packageUnit)}</td>
+          <td class="teco-native-number">${escapeHtml(expenseQuantityText(row.totalQty, row.itemUnit))}</td>
+          <td class="teco-native-number">${formatMoney(row.amount)}</td>
+          <td class="teco-native-number">${formatMoney(row.averageUnitPrice)}/${escapeHtml(row.itemUnit)}</td>
+          <td class="teco-native-number">${formatQuantity(row.entries)}</td>
+          <td>${escapeHtml(row.notes.join('; ') || '-')}</td>
+        </tr>
+      `;
+    }).join('');
   }
 
   function adjustmentRows(rows, editable) {
@@ -2973,6 +3124,28 @@
           </div>
         </section>
       ` : ''}
+
+      <section class="teco-native-panel teco-native-expenses">
+        <div class="teco-native-panel-title">
+          <div>
+            <h4>Rekap Pengeluaran per Klasifikasi dan Item</h4>
+            <span class="teco-native-panel-note">Setiap bahan dipisahkan; periode mengikuti pilihan Harian, Mingguan, atau Bulanan.</span>
+          </div>
+          <span class="teco-native-panel-note">Total: ${formatMoney(report.totalExpenses)}</span>
+        </div>
+        <div class="teco-native-table-wrap" style="margin-bottom:14px">
+          <table>
+            <thead><tr><th>No.</th><th>Klasifikasi</th><th>Item Berbeda</th><th>Jumlah Pembelian</th><th>Total Harga</th></tr></thead>
+            <tbody>${expenseCategoryRows(report.expenseCategories)}</tbody>
+          </table>
+        </div>
+        <div class="teco-native-table-wrap">
+          <table>
+            <thead><tr><th>No.</th><th>Item/Bahan</th><th>Isi per Item</th><th>Jumlah Item</th><th>Satuan</th><th>Total Volume</th><th>Total Harga</th><th>Harga/Satuan</th><th>Pembelian</th><th>Catatan</th></tr></thead>
+            <tbody>${expenseItemRows(report.expenseItems)}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>

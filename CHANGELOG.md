@@ -1,3 +1,12 @@
+# v3.3.2 — Pengeluaran Bahan Terstruktur
+
+- Menambahkan klasifikasi spesifik bahan baku, seperti Susu & Dairy, Kopi & Konsentrat, Sirup & Pemanis, Bubuk & Bahan Kering, Air & Es Batu, serta Kemasan.
+- Menambahkan nama item, isi/volume per item, satuan, jumlah item/kemasan, total volume otomatis, dan total harga.
+- Setiap item bahan disimpan terpisah agar tidak tercampur dalam satu catatan.
+- Menambahkan rekap pengeluaran per klasifikasi dan per item untuk laporan harian, mingguan, dan bulanan.
+- Memperluas export Excel/CSV dan laporan WhatsApp dengan rincian bahan, volume, jumlah item, serta harga per satuan.
+- Menjaga kompatibilitas data pengeluaran versi lama.
+
 # v3.3.1 — 16 Juli 2026
 
 - Memperbaiki pemasangan komponen laporan yang sebelumnya masuk ke dalam `.page-header` dan terjepit oleh layout flex.

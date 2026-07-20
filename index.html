@@ -9,7 +9,7 @@
 <title>Te.Co Pandawa - POS Kasir</title>
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjogIlRlLkNvIFBhbmRhd2EgLSBQT1MgS2FzaXIiLCAic2hvcnRfbmFtZSI6ICJUZS5DbyBQT1MiLCAic3RhcnRfdXJsIjogIi4iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgImJhY2tncm91bmRfY29sb3IiOiAiI0QzMkYyRiIsICJ0aGVtZV9jb2xvciI6ICIjRDMyRjJGIiwgIm9yaWVudGF0aW9uIjogInBvcnRyYWl0IiwgInNjb3BlIjogIi4iLCAiaWNvbnMiOiBbeyJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxOTIgMTkyJyUzRSUzQ3JlY3QgZmlsbD0nJTIzRDMyRjJGJyB3aWR0aD0nMTkyJyBoZWlnaHQ9JzE5Micgcng9JzI0Jy8lM0UlM0N0ZXh0IHg9Jzk2JyB5PScxMjAnIGZvbnQtc2l6ZT0nODAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJyBmb250LWZhbWlseT0nQXJpYWwnJTNFXHUyNjE1JTNDL3RleHQlM0UlM0Mvc3ZnJTNFIiwgInNpemVzIjogIjE5MngxOTIiLCAidHlwZSI6ICJpbWFnZS9zdmcreG1sIn0sIHsic3JjIjogImRhdGE6aW1hZ2Uvc3ZnK3htbCwlM0NzdmcgeG1sbnM9J2h0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB2aWV3Qm94PScwIDAgNTEyIDUxMiclM0UlM0NyZWN0IGZpbGw9JyUyM0QzMkYyRicgd2lkdGg9JzUxMicgaGVpZ2h0PSc1MTInIHJ4PSc0OCcvJTNFJTNDdGV4dCB4PScyNTYnIHk9JzMyMCcgZm9udC1zaXplPScyMDAnIHRleHQtYW5jaG9yPSdtaWRkbGUnIGZpbGw9J3doaXRlJyBmb250LWZhbWlseT0nQXJpYWwnJTNFXHUyNjE1JTNDL3RleHQlM0UlM0Mvc3ZnJTNFIiwgInNpemVzIjogIjUxMng1MTIiLCAidHlwZSI6ICJpbWFnZS9zdmcreG1sIn1dLCAiY2F0ZWdvcmllcyI6IFsiYnVzaW5lc3MiLCAiZmluYW5jZSJdLCAiZGVzY3JpcHRpb24iOiAiQXBsaWthc2kgUE9TIEthc2lyIERpZ2l0YWwgdW50dWsgVGUuQ28gUGFuZGF3YSBDb2ZmZWUiLCAibGFuZyI6ICJpZCIsICJkaXIiOiAibHRyIn0=">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect fill='%23D32F2F' width='192' height='192' rx='24'/%3E%3Ctext x='96' y='120' font-size='80' text-anchor='middle' fill='white' font-family='Arial'%3E☕%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="teco-native-main-style.css?v=3.3.1">
+<link rel="stylesheet" href="teco-native-main-style.css?v=3.3.2">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f5f5;color:#333;overflow-x:hidden}
@@ -406,7 +406,7 @@ body.pwa-mode .bottom-nav {
 <button onclick="doLogin()">Masuk</button>
 <div class="login-error" id="loginError">PIN salah atau user tidak ditemukan</div>
 </div>
-<div class="version-tag">v3.3.1 · Tampilan Laporan · Cloud-safe</div>
+<div class="version-tag">v3.3.2 · Pengeluaran Bahan · Cloud-safe</div>
 </div>
 
 <button id="installPwaBtn" onclick="installPWA()">📲 Install Aplikasi</button>
@@ -1096,13 +1096,13 @@ body.pwa-mode .bottom-nav {
 
 <!-- Admin: Expense Modal -->
 <div class="modal-overlay" id="modalExpense">
-<div class="modal" style="max-width:520px">
+<div class="modal" style="max-width:720px">
 <div class="modal-header">
-<h2>💸 Catatan Pengeluaran Harian</h2>
+<h2>💸 Pengeluaran Bahan & Operasional</h2>
 <button class="modal-close" onclick="closeModal('modalExpense')">×</button>
 </div>
 <div class="modal-body">
-<div class="info-box">Catatan pengeluaran ini akan mengurangi omzet pada laporan harian dan bulanan. Kasir dapat menambah dan mengedit catatan miliknya sendiri; Admin dapat melihat dan mengelola semua catatan.</div>
+<div class="info-box">Setiap bahan dicatat sebagai satu item terpisah agar laporan harian, mingguan, dan bulanan dapat direkap berdasarkan klasifikasi, nama bahan, volume/berat, jumlah item, serta total harga.</div>
 <input type="hidden" id="expenseEditId" value="">
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 <div class="cash-input-group">
@@ -1110,14 +1110,21 @@ body.pwa-mode .bottom-nav {
 <input type="date" id="expenseDate">
 </div>
 <div class="cash-input-group">
-<label>Nominal</label>
-<input type="number" id="expenseAmount" placeholder="Contoh: 50000" inputmode="numeric">
+<label>Total Harga</label>
+<input type="number" id="expenseAmount" placeholder="Contoh: 190000" inputmode="numeric" min="0" oninput="updateExpenseQuantityPreview()">
 </div>
 </div>
 <div class="cash-input-group">
-<label>Kategori</label>
-<select id="expenseCategory" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
-<option value="Bahan baku">Bahan baku</option>
+<label>Klasifikasi Item</label>
+<select id="expenseCategory" onchange="updateExpenseQuantityPreview()" style="width:100%;padding:14px 16px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="Susu & Dairy">Susu & Dairy</option>
+<option value="Kopi & Konsentrat">Kopi & Konsentrat</option>
+<option value="Sirup & Pemanis">Sirup & Pemanis</option>
+<option value="Bubuk & Bahan Kering">Bubuk & Bahan Kering</option>
+<option value="Air & Es Batu">Air & Es Batu</option>
+<option value="Kemasan">Kemasan</option>
+<option value="Bahan Tambahan">Bahan Tambahan</option>
+<option value="Bahan Baku Lainnya">Bahan Baku Lainnya</option>
 <option value="Operasional">Operasional</option>
 <option value="Transport">Transport</option>
 <option value="Listrik/Air">Listrik/Air</option>
@@ -1126,13 +1133,49 @@ body.pwa-mode .bottom-nav {
 </select>
 </div>
 <div class="cash-input-group">
-<label>Catatan</label>
-<input type="text" id="expenseNote" placeholder="Contoh: beli susu, cup, es batu">
+<label>Nama Item/Bahan</label>
+<input type="text" id="expenseItemName" list="expenseRecipeItems" placeholder="Contoh: Susu UHT atau Es Batu" oninput="suggestExpenseClassification();updateExpenseQuantityPreview()">
+<datalist id="expenseRecipeItems"></datalist>
 </div>
-<button class="btn-primary" id="expenseSaveBtn" style="width:100%" onclick="addDailyExpense()">+ Simpan Pengeluaran</button>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+<div class="cash-input-group">
+<label>Isi/Volume per Item</label>
+<input type="number" id="expenseItemQty" placeholder="950" min="0" step="0.01" inputmode="decimal" oninput="updateExpenseQuantityPreview()">
+</div>
+<div class="cash-input-group">
+<label>Satuan Isi</label>
+<select id="expenseItemUnit" onchange="updateExpenseQuantityPreview()" style="width:100%;padding:14px 12px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="ml">ml</option>
+<option value="liter">liter</option>
+<option value="gr">gram</option>
+<option value="kg">kg</option>
+<option value="pcs">pcs</option>
+</select>
+</div>
+<div class="cash-input-group">
+<label>Jumlah Item/Kemasan</label>
+<input type="number" id="expensePackageQty" placeholder="10" min="0" step="0.01" inputmode="decimal" oninput="updateExpenseQuantityPreview()">
+</div>
+<div class="cash-input-group">
+<label>Satuan Jumlah</label>
+<select id="expensePackageUnit" onchange="updateExpenseQuantityPreview()" style="width:100%;padding:14px 12px;border:2px solid var(--light-gray);border-radius:12px;font-size:15px;outline:none">
+<option value="pcs">pcs</option>
+<option value="pack">pack</option>
+<option value="botol">botol</option>
+<option value="dus">dus</option>
+<option value="karung">karung</option>
+</select>
+</div>
+</div>
+<div id="expenseQuantityPreview" class="small-help" style="padding:10px 12px;background:#f7f8fa;border-radius:10px;margin:-2px 0 12px">Total volume akan dihitung otomatis.</div>
+<div class="cash-input-group">
+<label>Catatan Tambahan</label>
+<input type="text" id="expenseNote" placeholder="Contoh: pembelian stok minggu ini">
+</div>
+<button class="btn-primary" id="expenseSaveBtn" style="width:100%" onclick="addDailyExpense()">+ Simpan Item Pengeluaran</button>
 <button class="btn-secondary" id="expenseCancelEditBtn" style="width:100%;margin-top:8px;display:none" onclick="resetExpenseForm()">Batal Edit</button>
 <div style="margin-top:18px;border-top:2px solid var(--light-gray);padding-top:12px">
-<h3 style="font-size:14px;margin-bottom:8px">Riwayat Pengeluaran</h3>
+<h3 style="font-size:14px;margin-bottom:8px">Riwayat Pengeluaran per Item</h3>
 <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px">
 <div class="cash-input-group" style="margin-bottom:0">
 <label>Lihat tanggal</label>
@@ -2339,10 +2382,16 @@ function buildCsvReport(txs, expenses, title) {
     buildVariantOrderSummary(txs).forEach((row, i) => {
         csv += [i+1,escapeCsv(row.name),escapeCsv(row.variant),row.qty,row.revenue].join(',') + '\n';
     });
-    csv += '\nLAPORAN PENGELUARAN\n';
-    csv += 'No,Tanggal,Kategori,Catatan,Nominal,Dibuat Oleh\n';
+    csv += '\nDETAIL PENGELUARAN PER ITEM\n';
+    csv += 'No,Tanggal,Klasifikasi,Item,Isi per Item,Satuan Isi,Jumlah Item,Satuan Jumlah,Total Volume,Catatan,Nominal,Dibuat Oleh\n';
     expenses.forEach((e, i) => {
-        csv += [i+1,e.date,escapeCsv(e.category),escapeCsv(e.note),e.amount,escapeCsv(e.cashierName || e.cashier || '')].join(',') + '\n';
+        csv += [i+1,e.date,escapeCsv(e.category),escapeCsv(e.itemName || e.note || e.category),e.itemQty || 1,e.itemUnit || 'pcs',e.packageQty || 1,e.packageUnit || 'pcs',expenseTotalQty(e),escapeCsv(e.note),e.amount,escapeCsv(e.cashierName || e.cashier || '')].join(',') + '\n';
+    });
+    csv += '\nREKAP PENGELUARAN PER KLASIFIKASI DAN ITEM\n';
+    csv += 'No,Klasifikasi,Item,Variasi Isi,Jumlah Item,Satuan Jumlah,Total Volume,Satuan Volume,Total Harga,Harga Rata-rata per Satuan\n';
+    aggregateExpenseItems(expenses).forEach((row, i) => {
+        const avg = row.totalQty > 0 ? Math.round(row.amount / row.totalQty) : 0;
+        csv += [i+1,escapeCsv(row.category),escapeCsv(row.itemName),escapeCsv(row.sizes.join('; ')),row.packageQty,row.packageUnit,row.totalQty,row.itemUnit,row.amount,avg].join(',') + '\n';
     });
     const revenue = txs.reduce((s,t)=>s+(t.total||0),0);
     const expenseTotal = expenses.reduce((s,e)=>s+(e.amount||0),0);
@@ -2445,8 +2494,18 @@ function buildWhatsappReport(type = 'filtered') {
     ['cash','qris','transfer'].forEach(k => { text += `- ${k.toUpperCase()}: Rp ${formatNumber(byPayment[k] || 0)}\n`; });
     text += `\nJumlah pesanan per varian:\n`;
     text += variantOrders.length ? variantOrders.map((p,i)=>`${i+1}. ${p.name} (${p.variant}): ${p.qty} cup`).join('\n') + '\n' : '- Belum ada data pesanan\n';
-    text += `\nPengeluaran terbaru:\n`;
-    text += expenses.slice(0,5).map((e,i)=>`${i+1}. ${e.category}: Rp ${formatNumber(e.amount || 0)} (${e.note || '-'})`).join('\n') || '- Tidak ada pengeluaran';
+    text += `\nPengeluaran per klasifikasi dan item:\n`;
+    const expenseRows = aggregateExpenseItems(expenses);
+    let lastCategory = '';
+    if(expenseRows.length) {
+        expenseRows.forEach((row) => {
+            if(row.category !== lastCategory) {
+                text += `\n[${row.category}]\n`;
+                lastCategory = row.category;
+            }
+            text += `- ${row.itemName}: ${formatExpenseQuantity(row.totalQty)} ${row.itemUnit} (${formatExpenseQuantity(row.packageQty)} ${row.packageUnit}) · Rp ${formatNumber(row.amount)}\n`;
+        });
+    } else text += '- Tidak ada pengeluaran';
     if(activeStock.length) {
         text += `\n\nStok perlu perhatian:\n` + activeStock.map((s,i)=>`${i+1}. ${s.itemName} - ${s.status} (${s.qty || '-'})`).join('\n');
     }
@@ -3294,11 +3353,125 @@ function exportHppCsv() {
     showToast('CSV HPP dan harga bahan berhasil dibuat');
 }
 
+const EXPENSE_RECIPE_ITEMS = [
+    'Air','Air Hangat','Air Mineral','Bubuk Rasa','Cup + Tutup','Es Batu','Fruktosa','Gula Aren',
+    'Kental Manis','Konsentrat','Krimer','Matcha','Milo','Robusta','Sirup','Sirup Lemon','Sirup Leci',
+    'Sirup Passion Fruit','Sirup Pistachio','Sirup Raspberry','Sirup Vanilla','Susu UHT','UHT'
+];
+
+function expenseClassificationForItem(name) {
+    const key = String(name || '').toLowerCase();
+    if(/uht|susu|dairy|kental manis/.test(key)) return 'Susu & Dairy';
+    if(/kopi|robusta|arabika|konsentrat/.test(key)) return 'Kopi & Konsentrat';
+    if(/sirup|gula|fruktosa|pemanis/.test(key)) return 'Sirup & Pemanis';
+    if(/bubuk|matcha|milo|krimer|cokelat|taro|red.?velvet/.test(key)) return 'Bubuk & Bahan Kering';
+    if(/es batu|air/.test(key)) return 'Air & Es Batu';
+    if(/cup|tutup|sedotan|plastik|kemasan|stiker/.test(key)) return 'Kemasan';
+    return 'Bahan Baku Lainnya';
+}
+
+function populateExpenseItemDatalist() {
+    const list = document.getElementById('expenseRecipeItems');
+    if(!list) return;
+    list.innerHTML = EXPENSE_RECIPE_ITEMS.map(name => `<option value="${name}"></option>`).join('');
+}
+
+function suggestExpenseClassification() {
+    const itemName = document.getElementById('expenseItemName')?.value || '';
+    const category = document.getElementById('expenseCategory');
+    const unit = document.getElementById('expenseItemUnit');
+    if(category && itemName.trim()) category.value = expenseClassificationForItem(itemName);
+    if(unit && itemName.trim()) {
+        const key = itemName.toLowerCase();
+        if(/es batu/.test(key)) unit.value = 'kg';
+        else if(/cup|tutup|sedotan|plastik|kemasan|stiker/.test(key)) unit.value = 'pcs';
+        else if(/bubuk|matcha|milo|krimer|kopi|robusta|arabika/.test(key)) unit.value = 'gr';
+        else unit.value = 'ml';
+    }
+}
+
+function expenseNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatExpenseQuantity(value) {
+    const number = expenseNumber(value);
+    return number.toLocaleString('id-ID', {maximumFractionDigits: 2});
+}
+
+function expenseTotalQty(expense) {
+    const explicit = expenseNumber(expense?.totalQty);
+    if(explicit > 0) return explicit;
+    const itemQty = expenseNumber(expense?.itemQty, 1);
+    const packageQty = expenseNumber(expense?.packageQty, 1);
+    return itemQty * packageQty;
+}
+
+function expenseTotalQtyText(expense) {
+    const total = expenseTotalQty(expense);
+    const unit = expense?.itemUnit || 'pcs';
+    let text = `${formatExpenseQuantity(total)} ${unit}`;
+    if(unit === 'ml' && total >= 1000) text += ` (${formatExpenseQuantity(total / 1000)} liter)`;
+    if(unit === 'gr' && total >= 1000) text += ` (${formatExpenseQuantity(total / 1000)} kg)`;
+    return text;
+}
+
+function expenseItemDetailText(expense) {
+    const itemQty = expenseNumber(expense?.itemQty, 1);
+    const packageQty = expenseNumber(expense?.packageQty, 1);
+    const itemUnit = expense?.itemUnit || 'pcs';
+    const packageUnit = expense?.packageUnit || 'pcs';
+    return `${formatExpenseQuantity(itemQty)} ${itemUnit}/item × ${formatExpenseQuantity(packageQty)} ${packageUnit} = ${expenseTotalQtyText(expense)}`;
+}
+
+function updateExpenseQuantityPreview() {
+    const preview = document.getElementById('expenseQuantityPreview');
+    if(!preview) return;
+    const itemName = document.getElementById('expenseItemName')?.value.trim() || 'Item';
+    const itemQty = expenseNumber(document.getElementById('expenseItemQty')?.value);
+    const packageQty = expenseNumber(document.getElementById('expensePackageQty')?.value);
+    const itemUnit = document.getElementById('expenseItemUnit')?.value || 'ml';
+    const packageUnit = document.getElementById('expensePackageUnit')?.value || 'pcs';
+    const amount = expenseNumber(document.getElementById('expenseAmount')?.value);
+    if(itemQty <= 0 || packageQty <= 0) {
+        preview.textContent = 'Isi volume dan jumlah item untuk menghitung total otomatis.';
+        return;
+    }
+    const totalQty = itemQty * packageQty;
+    const temp = {itemQty, packageQty, itemUnit, packageUnit, totalQty};
+    const unitCost = totalQty > 0 && amount > 0 ? ` · Harga rata-rata Rp ${formatNumber(Math.round(amount / totalQty))}/${itemUnit}` : '';
+    preview.textContent = `${itemName}: ${expenseItemDetailText(temp)}${unitCost}`;
+}
+
+function aggregateExpenseItems(expenses) {
+    const map = new Map();
+    (expenses || []).forEach(expense => {
+        const category = expense.category || 'Lain-lain';
+        const itemName = expense.itemName || expense.note || category;
+        const itemUnit = expense.itemUnit || 'pcs';
+        const packageUnit = expense.packageUnit || 'pcs';
+        const key = [category,itemName,itemUnit,packageUnit].map(v=>String(v).toLowerCase()).join('::');
+        if(!map.has(key)) map.set(key, {category,itemName,itemUnit,packageUnit,packageQty:0,totalQty:0,amount:0,entries:0,sizes:new Set(),notes:new Set()});
+        const row = map.get(key);
+        row.packageQty += expenseNumber(expense.packageQty, 1);
+        row.totalQty += expenseTotalQty(expense);
+        row.amount += expenseNumber(expense.amount);
+        row.entries += 1;
+        row.sizes.add(`${formatExpenseQuantity(expenseNumber(expense.itemQty, 1))} ${itemUnit}`);
+        if(expense.note && expense.note !== '-') row.notes.add(expense.note);
+    });
+    return Array.from(map.values()).map(row => ({...row, sizes:Array.from(row.sizes), notes:Array.from(row.notes)}))
+        .sort((a,b)=>a.category.localeCompare(b.category,'id') || a.itemName.localeCompare(b.itemName,'id'));
+}
+
 function openExpenseModal() {
     if(!state.currentUser) { showToast('Login terlebih dahulu'); return; }
     setDefaultDateInputs();
     setupExpenseAccess();
+    populateExpenseItemDatalist();
     resetExpenseForm(false);
+    updateExpenseQuantityPreview();
     renderExpenseList();
     openModal('modalExpense');
 }
@@ -3307,16 +3480,21 @@ function resetExpenseForm(clearValues = true) {
     const editEl = document.getElementById('expenseEditId');
     if(editEl) editEl.value = '';
     const btn = document.getElementById('expenseSaveBtn');
-    if(btn) btn.textContent = '+ Simpan Pengeluaran';
+    if(btn) btn.textContent = '+ Simpan Item Pengeluaran';
     const cancel = document.getElementById('expenseCancelEditBtn');
     if(cancel) cancel.style.display = 'none';
     if(clearValues) {
         const dateEl = document.getElementById('expenseDate');
         if(dateEl) dateEl.value = new Date().toISOString().split('T')[0];
-        ['expenseAmount','expenseNote'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+        ['expenseAmount','expenseNote','expenseItemName','expenseItemQty','expensePackageQty'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
         const cat = document.getElementById('expenseCategory');
-        if(cat) cat.value = 'Bahan baku';
+        if(cat) cat.value = 'Susu & Dairy';
+        const unit = document.getElementById('expenseItemUnit');
+        if(unit) unit.value = 'ml';
+        const packageUnit = document.getElementById('expensePackageUnit');
+        if(packageUnit) packageUnit.value = 'pcs';
     }
+    updateExpenseQuantityPreview();
 }
 
 function canManageExpense(e) {
@@ -3326,22 +3504,32 @@ function canManageExpense(e) {
 function addDailyExpense() {
     if(!state.currentUser) { showToast('Login terlebih dahulu'); return; }
     const date = document.getElementById('expenseDate').value || new Date().toISOString().split('T')[0];
-    const amount = parseInt(document.getElementById('expenseAmount').value) || 0;
+    const amount = Math.round(expenseNumber(document.getElementById('expenseAmount').value));
     const category = document.getElementById('expenseCategory').value || 'Lain-lain';
+    const itemName = document.getElementById('expenseItemName').value.trim();
+    const itemQty = expenseNumber(document.getElementById('expenseItemQty').value);
+    const itemUnit = document.getElementById('expenseItemUnit').value || 'pcs';
+    const packageQty = expenseNumber(document.getElementById('expensePackageQty').value);
+    const packageUnit = document.getElementById('expensePackageUnit').value || 'pcs';
+    const totalQty = itemQty * packageQty;
     const note = document.getElementById('expenseNote').value.trim();
     const editId = document.getElementById('expenseEditId')?.value || '';
-    if(amount <= 0) { showToast('Nominal pengeluaran harus lebih dari 0'); return; }
+    if(!itemName) { showToast('Nama item/bahan wajib diisi'); return; }
+    if(itemQty <= 0) { showToast('Isi atau volume per item harus lebih dari 0'); return; }
+    if(packageQty <= 0) { showToast('Jumlah item/kemasan harus lebih dari 0'); return; }
+    if(amount <= 0) { showToast('Total harga pengeluaran harus lebih dari 0'); return; }
 
+    const structured = {date, amount, category, itemName, itemQty, itemUnit, packageQty, packageUnit, totalQty, note: note || '-'};
     if(editId) {
         const idx = state.expenses.findIndex(e => e.id === editId);
         if(idx < 0) { showToast('Data pengeluaran tidak ditemukan'); return; }
         if(!canManageExpense(state.expenses[idx])) { showToast('Kasir hanya bisa mengedit catatan miliknya'); return; }
-        state.expenses[idx] = {...state.expenses[idx], date, amount, category, note: note || '-', updatedAt: new Date().toISOString(), updatedBy: state.currentUser.id, updatedByName: state.currentUser.name};
-        showToast('Pengeluaran berhasil diperbarui');
+        state.expenses[idx] = {...state.expenses[idx], ...structured, updatedAt: new Date().toISOString(), updatedBy: state.currentUser.id, updatedByName: state.currentUser.name};
+        showToast('Item pengeluaran berhasil diperbarui');
     } else {
-        const expense = {id: 'EXP' + Date.now().toString().slice(-8), date, amount, category, note: note || '-', cashier: state.currentUser.id, cashierName: state.currentUser.name, createdAt: new Date().toISOString()};
+        const expense = {id: 'EXP' + Date.now().toString().slice(-8), ...structured, cashier: state.currentUser.id, cashierName: state.currentUser.name, createdAt: new Date().toISOString()};
         state.expenses.unshift(expense);
-        showToast('Pengeluaran berhasil disimpan');
+        showToast('Item pengeluaran berhasil disimpan');
     }
     saveData();
     const filterDate = document.getElementById('expenseFilterDate');
@@ -3360,22 +3548,27 @@ function renderExpenseList() {
     let expenses = getVisibleExpenses({date: dateFilter, cashier: cashierFilter})
         .sort((a,b)=>(b.updatedAt || b.createdAt || b.date || '').localeCompare(a.updatedAt || a.createdAt || a.date || ''));
     const summary = document.getElementById('expenseListSummary');
-    const total = expenses.reduce((s,e) => s + (parseInt(e.amount) || 0), 0);
-    if(summary) summary.textContent = `${expenses.length} catatan · Total Rp ${formatNumber(total)}${dateFilter ? ' · Tanggal ' + dateFilter : ''}`;
+    const total = expenses.reduce((s,e) => s + expenseNumber(e.amount), 0);
+    const classificationCount = new Set(expenses.map(e=>e.category || 'Lain-lain')).size;
+    if(summary) summary.textContent = `${expenses.length} item · ${classificationCount} klasifikasi · Total Rp ${formatNumber(total)}${dateFilter ? ' · Tanggal ' + dateFilter : ''}`;
     if(!expenses.length) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">💸</div><p>Tidak ada pengeluaran pada tanggal ini</p></div>'; return; }
-    list.innerHTML = expenses.map(e => `
+    list.innerHTML = expenses.map(e => {
+        const itemName = e.itemName || e.note || e.category;
+        const detail = e.itemQty ? expenseItemDetailText(e) : 'Data lama: volume item belum dicatat';
+        const unitPrice = expenseTotalQty(e) > 0 ? Math.round(expenseNumber(e.amount) / expenseTotalQty(e)) : 0;
+        return `
         <div class="expense-item">
-            <div class="expense-icon">💸</div>
+            <div class="expense-icon">📦</div>
             <div class="expense-info">
-                <div class="expense-title">${e.category}</div>
-                <div class="expense-meta">${e.date} · ${e.cashierName || '-'}<br>${e.note || '-'}${e.updatedAt ? '<br>Diedit: ' + new Date(e.updatedAt).toLocaleString('id-ID') : ''}</div>
+                <div class="expense-title">${itemName}</div>
+                <div class="expense-meta"><strong>${e.category || 'Lain-lain'}</strong> · ${e.date} · ${e.cashierName || '-'}<br>${detail}${unitPrice ? ` · Rp ${formatNumber(unitPrice)}/${e.itemUnit || 'unit'}` : ''}<br>${e.note || '-'}</div>
             </div>
             <div>
                 <div class="expense-amount">Rp ${formatNumber(e.amount || 0)}</div>
                 ${canManageExpense(e) ? `<div class="inline-actions"><button class="btn-secondary btn-mini" onclick="editExpense('${e.id}')">Edit</button><button class="btn-secondary btn-mini" onclick="deleteExpense('${e.id}')">Hapus</button></div>` : ''}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function editExpense(expenseId) {
@@ -3385,22 +3578,31 @@ function editExpense(expenseId) {
     document.getElementById('expenseEditId').value = e.id;
     document.getElementById('expenseDate').value = e.date || new Date().toISOString().split('T')[0];
     document.getElementById('expenseAmount').value = e.amount || '';
-    document.getElementById('expenseCategory').value = e.category || 'Lain-lain';
+    const categoryEl = document.getElementById('expenseCategory');
+    const savedCategory = e.category || 'Lain-lain';
+    const categoryExists = Array.from(categoryEl.options).some(option => option.value === savedCategory);
+    categoryEl.value = categoryExists ? savedCategory : expenseClassificationForItem(e.itemName || e.note || '');
+    document.getElementById('expenseItemName').value = e.itemName || (e.note !== '-' ? e.note : '') || '';
+    document.getElementById('expenseItemQty').value = e.itemQty || 1;
+    document.getElementById('expenseItemUnit').value = e.itemUnit || 'pcs';
+    document.getElementById('expensePackageQty').value = e.packageQty || 1;
+    document.getElementById('expensePackageUnit').value = e.packageUnit || 'pcs';
     document.getElementById('expenseNote').value = e.note === '-' ? '' : (e.note || '');
     document.getElementById('expenseSaveBtn').textContent = '💾 Simpan Perubahan';
     document.getElementById('expenseCancelEditBtn').style.display = 'block';
+    updateExpenseQuantityPreview();
 }
 
 function deleteExpense(expenseId) {
     const e = state.expenses.find(x => x.id === expenseId);
     if(!e) return;
     if(!canManageExpense(e)) { showToast('Kasir hanya bisa menghapus catatan miliknya'); return; }
-    if(!confirm('Hapus catatan pengeluaran ini?')) return;
+    if(!confirm('Hapus item pengeluaran ini?')) return;
     state.expenses = state.expenses.filter(e => e.id !== expenseId);
     saveData();
     renderExpenseList();
     updateStats();
-    showToast('Pengeluaran dihapus');
+    showToast('Item pengeluaran dihapus');
 }
 
 function openDeleteCashierModal() {
@@ -3742,7 +3944,7 @@ document.addEventListener('DOMContentLoaded', init);
 (function () {
   'use strict';
 
-  const VERSION = '3.3.1';
+  const VERSION = '3.3.2';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = {"version":"1.1.0","source":"HPP_Resep_Bahan_Penggunaan.xlsx","timezone":"Asia/Jakarta","concentrateBatchYieldMl":1000,"notes":["Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.","Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren.","Nama resep KOPI MILO dinormalisasi menjadi COFFEE MILO agar sesuai dengan nama menu.","MILO MALAYSIA memakai resep Milo original tanpa sirup rasa."],"recipes":{"KONSENTRAT":[{"material":"Kental Manis","qty":200.0,"unit":"ml"},{"material":"Krimer","qty":100.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":100.0,"unit":"ml"},{"material":"Robusta","qty":45.0,"unit":"gr"},{"material":"Air","qty":800.0,"unit":"ml"}],"RENJANA":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"SAKALA":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"KAHWA":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":5.0,"unit":"ml"},{"material":"Fruktosa","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"AMERICANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"PREMIUM SERIES (BUTTERSCOTCH, CARAMEL, HAZELNUT)":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)":[{"material":"Kental Manis","qty":20.0,"unit":"ml"},{"material":"Bubuk Rasa","qty":20.0,"unit":"gr"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHAPRESSO":[{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Krimer","qty":15.0,"unit":"gr"},{"material":"Bubuk Rasa","qty":18.0,"unit":"gr"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHA AREN":[{"material":"Gula Aren","qty":15.0,"unit":"ml"},{"material":"Matcha","qty":18.0,"unit":"gr"},{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Air Hangat","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO BUTTERSCOTCH, CARAMEL, HAZELNUT":[{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"REDBERRYCANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Lemon","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"GOLDEN DRIFT":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Leci","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"LUMA PEARL":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Passion Fruit","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"KOPSU PISTACHIO":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"Sirup Pistachio","qty":15.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"COFFEE MILO":[{"material":"Kental Manis","qty":10.0,"unit":"ml"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO MALAYSIA":[{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}]}};
@@ -4497,7 +4699,25 @@ document.addEventListener('DOMContentLoaded', init);
     ]) || 'Lain-lain');
 
     const note = canonical(first(raw, NOTE_KEYS) || category);
-    const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${amount}-${category}`);
+    const itemName = canonical(first(raw, [
+      'itemName', 'item_name', 'namaItem', 'nama_item', 'material', 'bahan', 'ingredient'
+    ]) || note || category);
+    const itemQty = Math.max(0, toNumber(first(raw, [
+      'itemQty', 'item_qty', 'volumePerItem', 'volume_per_item', 'isiPerItem', 'isi_per_item'
+    ])) || 1);
+    const itemUnit = canonical(first(raw, [
+      'itemUnit', 'item_unit', 'volumeUnit', 'volume_unit', 'satuanIsi', 'satuan_isi', 'unit'
+    ]) || 'pcs').toLowerCase();
+    const packageQty = Math.max(0, toNumber(first(raw, [
+      'packageQty', 'package_qty', 'jumlahItem', 'jumlah_item', 'jumlahKemasan', 'jumlah_kemasan'
+    ])) || 1);
+    const packageUnit = canonical(first(raw, [
+      'packageUnit', 'package_unit', 'satuanJumlah', 'satuan_jumlah', 'satuanKemasan', 'satuan_kemasan'
+    ]) || 'pcs').toLowerCase();
+    const totalQty = Math.max(0, toNumber(first(raw, [
+      'totalQty', 'total_qty', 'totalVolume', 'total_volume'
+    ])) || (itemQty * packageQty));
+    const id = String(first(raw, ID_KEYS) || fallbackId || `${date.getTime()}-${amount}-${category}-${itemName}`);
 
     return {
       id,
@@ -4505,6 +4725,12 @@ document.addEventListener('DOMContentLoaded', init);
       amount,
       cashier: canonical(cashier || 'Tidak diketahui'),
       category,
+      itemName,
+      itemQty,
+      itemUnit,
+      packageQty,
+      packageUnit,
+      totalQty,
       note,
       raw
     };
@@ -4561,6 +4787,9 @@ document.addEventListener('DOMContentLoaded', init);
         cashierKey(expense.cashier),
         Math.round(expense.amount),
         keyText(expense.category),
+        keyText(expense.itemName),
+        Math.round(expense.totalQty * 1000),
+        keyText(expense.itemUnit),
         keyText(expense.note)
       ].join('::');
       if (!map.has(signature)) map.set(signature, expense);
@@ -5560,6 +5789,56 @@ document.addEventListener('DOMContentLoaded', init);
       return periodMatch && cashierMatch;
     });
   }
+
+  function expenseQuantityText(value, unit) {
+    const qty = toNumber(value);
+    const normalized = canonical(unit || 'pcs').toLowerCase();
+    let text = `${formatQuantity(qty)} ${normalized}`;
+    if (normalized === 'ml' && qty >= 1000) text += ` (${formatQuantity(qty / 1000)} liter)`;
+    if (normalized === 'gr' && qty >= 1000) text += ` (${formatQuantity(qty / 1000)} kg)`;
+    return text;
+  }
+
+  function aggregateExpenseItems(expenses) {
+    const map = new Map();
+    expenses.forEach((expense) => {
+      const category = canonical(expense.category || 'Lain-lain');
+      const itemName = canonical(expense.itemName || expense.note || category);
+      const itemUnit = canonical(expense.itemUnit || 'pcs').toLowerCase();
+      const packageUnit = canonical(expense.packageUnit || 'pcs').toLowerCase();
+      const key = [category, itemName, itemUnit, packageUnit].map(keyText).join('::');
+      if (!map.has(key)) map.set(key, {
+        key, category, itemName, itemUnit, packageUnit,
+        packageQty: 0, totalQty: 0, amount: 0, entries: 0,
+        sizes: new Set(), notes: new Set()
+      });
+      const row = map.get(key);
+      row.packageQty += toNumber(expense.packageQty) || 1;
+      row.totalQty += toNumber(expense.totalQty) || ((toNumber(expense.itemQty) || 1) * (toNumber(expense.packageQty) || 1));
+      row.amount += toNumber(expense.amount);
+      row.entries += 1;
+      row.sizes.add(`${formatQuantity(toNumber(expense.itemQty) || 1)} ${itemUnit}`);
+      if (expense.note && expense.note !== '-') row.notes.add(expense.note);
+    });
+    return Array.from(map.values()).map((row) => ({
+      ...row,
+      sizes: Array.from(row.sizes),
+      notes: Array.from(row.notes),
+      averageUnitPrice: row.totalQty > 0 ? row.amount / row.totalQty : 0
+    })).sort((a, b) => a.category.localeCompare(b.category, 'id') || a.itemName.localeCompare(b.itemName, 'id'));
+  }
+
+  function aggregateExpenseCategories(items) {
+    const map = new Map();
+    items.forEach((item) => {
+      if (!map.has(item.category)) map.set(item.category, { category: item.category, itemCount: 0, entries: 0, amount: 0 });
+      const row = map.get(item.category);
+      row.itemCount += 1;
+      row.entries += item.entries;
+      row.amount += item.amount;
+    });
+    return Array.from(map.values()).sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category, 'id'));
+  }
   function formatPeriodLabel(mode, period) {
     if (mode === 'daily') {
       const date = dateFromKey(period);
@@ -5647,6 +5926,8 @@ document.addEventListener('DOMContentLoaded', init);
     });
 
     const expenses = filterExpenses(allExpenses, mode, period, cashier);
+    const expenseItems = aggregateExpenseItems(expenses);
+    const expenseCategories = aggregateExpenseCategories(expenseItems);
     const products = aggregateProducts(transactions);
     const materials = aggregateMaterials(products, root);
     const adjustments = reportAdjustments(mode, period, cashier);
@@ -5672,6 +5953,8 @@ document.addEventListener('DOMContentLoaded', init);
       cashierLabel: cashier === 'ALL' ? 'Semua Kasir' : cashier,
       transactions,
       expenses,
+      expenseItems,
+      expenseCategories,
       products,
       materials,
       payments: aggregatePayments(transactions),
@@ -5742,10 +6025,18 @@ document.addEventListener('DOMContentLoaded', init);
       lines.push('• Tidak ada pembayaran pada periode ini');
     }
 
-    lines.push('', '*LAPORAN PENGELUARAN*');
-    if (report.expenses.length) {
-      report.expenses.forEach((expense) => {
-        lines.push(`• ${expense.category}: ${formatMoney(expense.amount)} — ${expense.note || '-'}`);
+    lines.push('', '*LAPORAN PENGELUARAN PER KLASIFIKASI & ITEM*');
+    if (report.expenseItems.length) {
+      let activeCategory = '';
+      report.expenseItems.forEach((item) => {
+        if (item.category !== activeCategory) {
+          lines.push(`_${item.category}_`);
+          activeCategory = item.category;
+        }
+        lines.push(
+          `• ${item.itemName}: ${expenseQuantityText(item.totalQty, item.itemUnit)} ` +
+          `(${formatQuantity(item.packageQty)} ${item.packageUnit}) — *${formatMoney(item.amount)}*`
+        );
       });
     } else {
       lines.push('• Tidak ada pengeluaran pada periode ini');
@@ -5996,10 +6287,32 @@ document.addEventListener('DOMContentLoaded', init);
       ]));
     });
 
-    const expenses = [['Tanggal', 'Waktu', 'ID_Pengeluaran', 'Kasir', 'Kategori', 'Catatan', 'Nominal']];
+    const expenses = [[
+      'Tanggal', 'Waktu', 'ID_Pengeluaran', 'Kasir', 'Klasifikasi', 'Item_Bahan',
+      'Isi_Per_Item', 'Satuan_Isi', 'Jumlah_Item', 'Satuan_Jumlah',
+      'Total_Volume', 'Catatan', 'Nominal'
+    ]];
     report.expenses.forEach((expense) => expenses.push([
       dateKey(expense.date), timeText(expense.date), expense.id,
-      expense.cashier, expense.category, expense.note, expense.amount
+      expense.cashier, expense.category, expense.itemName,
+      expense.itemQty, expense.itemUnit, expense.packageQty, expense.packageUnit,
+      expense.totalQty, expense.note, expense.amount
+    ]));
+
+    const expenseCategories = [['No', 'Klasifikasi', 'Jumlah_Item_Berbeda', 'Jumlah_Pembelian', 'Total_Harga']];
+    report.expenseCategories.forEach((row, index) => expenseCategories.push([
+      index + 1, row.category, row.itemCount, row.entries, row.amount
+    ]));
+
+    const expenseItems = [[
+      'No', 'Klasifikasi', 'Item_Bahan', 'Variasi_Isi_Per_Item',
+      'Jumlah_Item', 'Satuan_Jumlah', 'Total_Volume', 'Satuan_Volume',
+      'Total_Harga', 'Harga_Rata_Rata_Per_Satuan', 'Jumlah_Pembelian', 'Catatan'
+    ]];
+    report.expenseItems.forEach((row, index) => expenseItems.push([
+      index + 1, row.category, row.itemName, row.sizes.join('; '),
+      row.packageQty, row.packageUnit, row.totalQty, row.itemUnit,
+      row.amount, row.averageUnitPrice, row.entries, row.notes.join('; ')
     ]));
 
     const payments = [['No', 'Tipe_Pembayaran', 'Jumlah_Transaksi', 'Nominal']];
@@ -6020,6 +6333,8 @@ document.addEventListener('DOMContentLoaded', init);
       [`Penyesuaian ${suffix}`]: adjustments,
       [`Transaksi ${suffix}`]: transactions,
       [`Pengeluaran ${suffix}`]: expenses,
+      [`Rekap Klasifikasi ${suffix}`]: expenseCategories,
+      [`Rekap Item Bahan ${suffix}`]: expenseItems,
       [`Pembayaran ${suffix}`]: payments
     };
 
@@ -6246,6 +6561,44 @@ document.addEventListener('DOMContentLoaded', init);
 
   function exportCurrent() {
     exportActiveSheets();
+  }
+
+  function expenseCategoryRows(rows) {
+    if (!rows.length) return '<tr><td colspan="5" class="teco-native-empty">Tidak ada klasifikasi pengeluaran pada periode ini.</td></tr>';
+    return rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.category)}</td>
+        <td class="teco-native-number">${formatQuantity(row.itemCount)}</td>
+        <td class="teco-native-number">${formatQuantity(row.entries)}</td>
+        <td class="teco-native-number">${formatMoney(row.amount)}</td>
+      </tr>
+    `).join('');
+  }
+
+  function expenseItemRows(rows) {
+    if (!rows.length) return '<tr><td colspan="10" class="teco-native-empty">Tidak ada item pengeluaran pada periode ini.</td></tr>';
+    let activeCategory = '';
+    return rows.map((row, index) => {
+      const group = row.category !== activeCategory
+        ? `<tr><td colspan="10"><strong>${escapeHtml(row.category)}</strong></td></tr>`
+        : '';
+      activeCategory = row.category;
+      return group + `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(row.itemName)}</td>
+          <td>${escapeHtml(row.sizes.join(', '))}</td>
+          <td class="teco-native-number">${formatQuantity(row.packageQty)}</td>
+          <td>${escapeHtml(row.packageUnit)}</td>
+          <td class="teco-native-number">${escapeHtml(expenseQuantityText(row.totalQty, row.itemUnit))}</td>
+          <td class="teco-native-number">${formatMoney(row.amount)}</td>
+          <td class="teco-native-number">${formatMoney(row.averageUnitPrice)}/${escapeHtml(row.itemUnit)}</td>
+          <td class="teco-native-number">${formatQuantity(row.entries)}</td>
+          <td>${escapeHtml(row.notes.join('; ') || '-')}</td>
+        </tr>
+      `;
+    }).join('');
   }
 
   function adjustmentRows(rows, editable) {
@@ -6714,6 +7067,28 @@ document.addEventListener('DOMContentLoaded', init);
           </div>
         </section>
       ` : ''}
+
+      <section class="teco-native-panel teco-native-expenses">
+        <div class="teco-native-panel-title">
+          <div>
+            <h4>Rekap Pengeluaran per Klasifikasi dan Item</h4>
+            <span class="teco-native-panel-note">Setiap bahan dipisahkan; periode mengikuti pilihan Harian, Mingguan, atau Bulanan.</span>
+          </div>
+          <span class="teco-native-panel-note">Total: ${formatMoney(report.totalExpenses)}</span>
+        </div>
+        <div class="teco-native-table-wrap" style="margin-bottom:14px">
+          <table>
+            <thead><tr><th>No.</th><th>Klasifikasi</th><th>Item Berbeda</th><th>Jumlah Pembelian</th><th>Total Harga</th></tr></thead>
+            <tbody>${expenseCategoryRows(report.expenseCategories)}</tbody>
+          </table>
+        </div>
+        <div class="teco-native-table-wrap">
+          <table>
+            <thead><tr><th>No.</th><th>Item/Bahan</th><th>Isi per Item</th><th>Jumlah Item</th><th>Satuan</th><th>Total Volume</th><th>Total Harga</th><th>Harga/Satuan</th><th>Pembelian</th><th>Catatan</th></tr></thead>
+            <tbody>${expenseItemRows(report.expenseItems)}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section class="teco-native-panel teco-native-adjustments">
         <div class="teco-native-panel-title"><h4>Penyesuaian Laporan</h4>${session.role === 'admin' ? '<button type="button" id="tecoNativeAddAdjustment" class="teco-native-mini">+ Atur</button>' : ''}</div>

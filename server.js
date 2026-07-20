@@ -21,7 +21,7 @@ const mimeTypes = {
 const server = http.createServer((req, res) => {
   // index.html adalah aplikasi utama yang memuat sinkronisasi Firebase,
   // laporan native, serta analisa HPP admin terbaru.
-  // Gunakan pathname agar query cache-busting seperti ?v=3.3.1
+  // Gunakan pathname agar query cache-busting seperti ?v=3.3.2
   // tidak dianggap sebagai bagian dari nama file.
   const requestPath = new URL(req.url, 'http://localhost').pathname;
   let filePath = requestPath === '/' ? '/index.html' : requestPath;
