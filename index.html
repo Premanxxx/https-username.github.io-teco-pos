@@ -186,6 +186,25 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f5f
 .setting-item .setting-name{font-size:14px;font-weight:600}
 .setting-item .setting-desc{font-size:12px;color:var(--gray);margin-top:2px}
 .setting-item .setting-action{color:var(--gray);font-size:18px}
+.menu-manage-item{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid #eee;border-radius:14px;margin-bottom:10px;background:#fff}
+.menu-manage-thumb{width:54px;height:54px;border-radius:12px;overflow:hidden;background:#f6f6f6;display:flex;align-items:center;justify-content:center;font-size:28px;flex:0 0 auto}
+.menu-manage-thumb img{width:100%;height:100%;object-fit:cover}
+.menu-manage-main{min-width:0;flex:1}
+.menu-manage-title{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu-manage-meta{font-size:12px;color:var(--gray);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu-editor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.menu-editor-grid .full{grid-column:1/-1}
+.menu-editor-field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:var(--dark)}
+.menu-editor-field input,.menu-editor-field select,.menu-editor-field textarea{width:100%;padding:10px 12px;border:1px solid var(--light-gray);border-radius:10px;font:inherit;outline:none;background:white}
+.menu-editor-field textarea{resize:vertical;min-height:70px}
+.menu-editor-image{display:flex;gap:12px;align-items:center;padding:10px;border:1px dashed var(--light-gray);border-radius:12px}
+.menu-editor-image-preview{width:86px;height:86px;border-radius:12px;overflow:hidden;background:#f6f6f6;display:flex;align-items:center;justify-content:center;font-size:36px;flex:0 0 auto}
+.menu-editor-image-preview img{width:100%;height:100%;object-fit:cover}
+.menu-variant-row{display:grid;grid-template-columns:minmax(0,1fr) 130px 38px;gap:8px;align-items:end;margin-bottom:8px}
+.menu-variant-row input{width:100%;padding:9px 10px;border:1px solid var(--light-gray);border-radius:9px}
+.menu-variant-remove{height:38px;border:1px solid #ffcdd2;background:#fff5f5;color:#c62828;border-radius:9px;cursor:pointer}
+.menu-editor-help{font-size:11px;color:var(--gray);line-height:1.45;margin-top:4px}
+@media(max-width:560px){.menu-editor-grid{grid-template-columns:1fr}.menu-editor-grid .full{grid-column:auto}.menu-variant-row{grid-template-columns:minmax(0,1fr) 105px 38px}}
 .toggle{width:48px;height:26px;background:var(--light-gray);border-radius:13px;position:relative;cursor:pointer;transition:background .3s}
 .toggle.active{background:var(--primary)}
 .toggle::after{content:'';position:absolute;width:22px;height:22px;background:white;border-radius:50%;top:2px;left:2px;transition:left .3s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
@@ -406,7 +425,7 @@ body.pwa-mode .bottom-nav {
 <button onclick="doLogin()">Masuk</button>
 <div class="login-error" id="loginError">PIN salah atau user tidak ditemukan</div>
 </div>
-<div class="version-tag">v3.3.2 · Pengeluaran Bahan · Cloud-safe</div>
+<div class="version-tag">v3.4.0 · Menu Editor · Cloud-safe</div>
 </div>
 
 <button id="installPwaBtn" onclick="installPWA()">📲 Install Aplikasi</button>
@@ -1063,29 +1082,20 @@ body.pwa-mode .bottom-nav {
 
 <!-- Menu Edit Modal -->
 <div class="modal-overlay" id="modalMenuEdit">
-<div class="modal" style="max-width:500px">
+<div class="modal" style="max-width:720px">
 <div class="modal-header">
-<h2>📝 Edit Menu</h2>
+<h2>📝 Pengaturan Menu</h2>
 <button class="modal-close" onclick="closeModal('modalMenuEdit')">×</button>
 </div>
 <div class="modal-body">
-<div id="menuEditList" style="max-height:400px;overflow-y:auto"></div>
-<div style="margin-top:16px;padding-top:16px;border-top:2px solid var(--light-gray)">
-<p style="font-size:13px;font-weight:600;margin-bottom:8px">Tambah Item Baru</p>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-<input type="text" id="newItemName" placeholder="Nama item" style="padding:10px;border:1px solid var(--light-gray);border-radius:8px">
-<input type="number" id="newItemPrice" placeholder="Harga" style="padding:10px;border:1px solid var(--light-gray);border-radius:8px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+<div>
+<div style="font-weight:700">Daftar Menu</div>
+<div style="font-size:12px;color:var(--gray);margin-top:2px">Edit nama, harga, varian, kategori, dan gambar menu.</div>
 </div>
-<select id="newItemCat" style="width:100%;padding:10px;border:1px solid var(--light-gray);border-radius:8px;margin-top:8px">
-<option value="coffee">Coffee</option>
-<option value="milo">Milo</option>
-<option value="matcha">Matcha</option>
-<option value="signature">Signature</option>
-<option value="premium">Premium</option>
-<option value="noncoffee">Non-Coffee</option>
-</select>
-<button class="btn-primary" style="width:100%;margin-top:8px" onclick="addMenuItem()">+ Tambah Item</button>
+<button class="btn-primary" style="padding:9px 14px;white-space:nowrap" onclick="openMenuItemEditor(-1)">+ Menu Baru</button>
 </div>
+<div id="menuEditList" style="max-height:430px;overflow-y:auto;padding-right:2px"></div>
 </div>
 <div class="modal-footer">
 <button class="btn-secondary" onclick="closeModal('modalMenuEdit')">Tutup</button>
@@ -1093,6 +1103,72 @@ body.pwa-mode .bottom-nav {
 </div>
 </div>
 
+<!-- Menu Item Editor Modal -->
+<div class="modal-overlay" id="modalMenuItemEdit" style="z-index:1200">
+<div class="modal" style="max-width:680px">
+<div class="modal-header">
+<h2 id="menuItemEditTitle">Edit Menu</h2>
+<button class="modal-close" onclick="closeModal('modalMenuItemEdit')">×</button>
+</div>
+<div class="modal-body">
+<div class="menu-editor-grid">
+<div class="menu-editor-field">
+<label>Nama Menu</label>
+<input type="text" id="menuEditorName" placeholder="Contoh: Renjana">
+</div>
+<div class="menu-editor-field">
+<label>Harga Dasar</label>
+<input type="number" id="menuEditorPrice" min="0" step="500" placeholder="10000">
+</div>
+<div class="menu-editor-field">
+<label>Kategori</label>
+<select id="menuEditorCategory">
+<option value="coffee">Coffee</option>
+<option value="milo">Milo</option>
+<option value="matcha">Matcha</option>
+<option value="signature">Signature</option>
+<option value="premium">Premium</option>
+<option value="noncoffee">Non-Coffee</option>
+</select>
+</div>
+<div class="menu-editor-field">
+<label>Badge</label>
+<input type="text" id="menuEditorBadge" placeholder="BEST SELLER / NEW (opsional)">
+</div>
+<div class="menu-editor-field full">
+<label>Deskripsi</label>
+<textarea id="menuEditorDesc" placeholder="Deskripsi singkat menu"></textarea>
+</div>
+<div class="menu-editor-field full">
+<label>Gambar Ilustrasi Menu</label>
+<div class="menu-editor-image">
+<div class="menu-editor-image-preview" id="menuEditorImagePreview">🥤</div>
+<div style="flex:1;min-width:0">
+<input type="file" id="menuEditorImageInput" accept="image/*" onchange="handleMenuEditorImage(this)">
+<div class="menu-editor-help">Gambar otomatis diperkecil agar penyimpanan lokal dan sinkronisasi lebih ringan.</div>
+<button type="button" class="btn-secondary" style="padding:7px 10px;margin-top:7px;font-size:12px" onclick="removeMenuEditorImage()">Hapus Gambar</button>
+</div>
+</div>
+</div>
+<div class="menu-editor-field full">
+<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px">
+<label style="margin:0">Varian Menu</label>
+<button type="button" class="btn-secondary" style="padding:7px 10px;font-size:12px" onclick="addMenuEditorVariant()">+ Varian</button>
+</div>
+<div id="menuEditorVariants"></div>
+<div class="menu-editor-help">Harga varian boleh dikosongkan untuk memakai Harga Dasar. Isi harga varian jika varian tertentu memiliki harga berbeda.</div>
+</div>
+</div>
+</div>
+<div class="modal-footer" style="justify-content:space-between">
+<button class="btn-secondary" id="menuEditorDeleteBtn" style="color:#c62828;border-color:#ffcdd2" onclick="deleteMenuItemFromEditor()">🗑️ Hapus</button>
+<div style="display:flex;gap:8px">
+<button class="btn-secondary" onclick="closeModal('modalMenuItemEdit')">Batal</button>
+<button class="btn-primary" onclick="saveMenuItemEditor()">💾 Simpan</button>
+</div>
+</div>
+</div>
+</div>
 
 <!-- Admin: Expense Modal -->
 <div class="modal-overlay" id="modalExpense">
@@ -1511,6 +1587,9 @@ const FIREBASE_CONFIG = {
 const FIREBASE_DB_PATH = 'teco_pos/teco-pandawa-main';
 let syncController = {enabled:false, ref:null, applyingRemote:false, lastPush:0};
 let currentReportType = 'daily';
+let menuEditorIndex = -1;
+let menuEditorImage = '';
+let menuEditorImageChanged = false;
 
 // ==================== STATE ====================
 let state = {
@@ -1521,6 +1600,7 @@ let state = {
     stockNotes: [],
     hppData: {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}},
     menu: [],
+    syncMeta: {deletedTransactions:{},deletedExpenses:{},deletedStockNotes:{},deletedMenu:{}},
     users: {},
     settings: {
         storeName:'Te.Co Pandawa',
@@ -1547,6 +1627,7 @@ function init() {
     loadData();
     if(!state.menu.length) state.menu = JSON.parse(JSON.stringify(DEFAULT_MENU));
     if(!Object.keys(state.users).length) state.users = JSON.parse(JSON.stringify(DEFAULT_USERS));
+    ensureMenuStructure();
     ensureMenuImages();
     state.users = {...JSON.parse(JSON.stringify(DEFAULT_USERS)), ...state.users};
     state.expenses = state.expenses || [];
@@ -1612,6 +1693,7 @@ function buildDataPayload() {
         stockNotes: state.stockNotes || [],
         hppData: state.hppData || {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}},
         menu: state.menu || [],
+        syncMeta: state.syncMeta || {deletedTransactions:{},deletedExpenses:{},deletedStockNotes:{},deletedMenu:{}},
         users: state.users || {},
         settings: state.settings || {},
         updatedAt: new Date().toISOString(),
@@ -1627,6 +1709,12 @@ function applyDataPayload(data, refreshUI = true) {
     state.hppData = data.hppData && typeof data.hppData === 'object' ? data.hppData : {version:3,recipes:{},deletedRecipes:{},materialPrices:{},deletedMaterialPrices:{}};
     ensureHppData();
     state.menu = Array.isArray(data.menu) ? data.menu : [];
+    ensureMenuStructure();
+    ensureMenuImages();
+    state.syncMeta = data.syncMeta && typeof data.syncMeta === 'object'
+        ? data.syncMeta
+        : {deletedTransactions:{},deletedExpenses:{},deletedStockNotes:{},deletedMenu:{}};
+    state.syncMeta.deletedMenu = state.syncMeta.deletedMenu || {};
     state.users = data.users && typeof data.users === 'object' ? data.users : {};
     state.settings = {...state.settings, ...(data.settings || {})};
     localStorage.setItem('teco_pos_data', JSON.stringify(buildDataPayload()));
@@ -1955,35 +2043,90 @@ function setupCategoryTabs() {
 }
 
 function menuVisual(item, className = '') {
-    if(item && item.img) return `<img ${className ? `class="${className}"` : ''} src="${item.img}" alt="${item.name || 'menu'}">`;
+    if(item && item.img) return `<img ${className ? `class="${className}"` : ''} src="${item.img}" alt="${hppEscape(item.name || 'menu')}">`;
     return item?.emoji || '🥤';
+}
+
+function normalizeMenuVariant(variant, index = 0) {
+    if(typeof variant === 'string') return {id:'v' + (index + 1), name:variant.trim() || ('Varian ' + (index + 1)), price:null};
+    const raw = variant && typeof variant === 'object' ? variant : {};
+    const price = raw.price === '' || raw.price == null ? null : Math.max(0, Number(raw.price) || 0);
+    return {
+        id:String(raw.id || ('v' + (index + 1))).replace(/[^a-zA-Z0-9_-]/g, '') || ('v' + (index + 1)),
+        name:String(raw.name || raw.label || ('Varian ' + (index + 1))).trim(),
+        price:price
+    };
+}
+
+function ensureMenuStructure() {
+    (state.menu || []).forEach(item => {
+        if(!Array.isArray(item.variants) || !item.variants.length) {
+            item.variants = [
+                {id:'cold', name:'Dingin', price:null},
+                {id:'hot', name:'Hangat', price:null}
+            ];
+        } else {
+            item.variants = item.variants.map(normalizeMenuVariant).filter(v => v.name);
+            if(!item.variants.length) item.variants = [{id:'default', name:'Tanpa varian', price:null}];
+        }
+        item.price = Math.max(0, Number(item.price) || 0);
+        if(typeof item.emoji !== 'string' || !item.emoji) item.emoji = '🥤';
+        if(typeof item.desc !== 'string') item.desc = item.name || '';
+        if(typeof item.badge !== 'string') item.badge = '';
+    });
+}
+
+function getMenuVariants(item) {
+    if(!item) return [{id:'default', name:'Tanpa varian', price:null}];
+    if(!Array.isArray(item.variants) || !item.variants.length) return [
+        {id:'cold', name:'Dingin', price:null},
+        {id:'hot', name:'Hangat', price:null}
+    ];
+    return item.variants.map(normalizeMenuVariant).filter(v => v.name);
+}
+
+function getMenuVariant(item, variantName) {
+    const variants = getMenuVariants(item);
+    return variants.find(v => v.name === variantName) || variants[0] || {name:'Tanpa varian', price:null};
+}
+
+function getMenuVariantPrice(item, variantName) {
+    const variant = getMenuVariant(item, variantName);
+    return variant && variant.price != null && Number(variant.price) >= 0 ? Number(variant.price) : (Number(item?.price) || 0);
 }
 
 function ensureMenuImages() {
     const map = MENU_IMAGES || {};
     (state.menu || []).forEach(item => {
-        if(!item.img && map[item.id]) item.img = map[item.id];
+        if(!Object.prototype.hasOwnProperty.call(item, 'img') && map[item.id]) item.img = map[item.id];
     });
 }
 
 function renderMenu(category) {
+    ensureMenuStructure();
     ensureMenuImages();
     const grid = document.getElementById('menuGrid');
     const items = category === 'all' ? state.menu : state.menu.filter(i => i.category === category);
 
-    grid.innerHTML = items.map(item => `
+    grid.innerHTML = items.map(item => {
+        const variants = getMenuVariants(item);
+        const prices = variants.map(v => getMenuVariantPrice(item, v.name));
+        const minPrice = prices.length ? Math.min(...prices) : Number(item.price) || 0;
+        const maxPrice = prices.length ? Math.max(...prices) : Number(item.price) || 0;
+        const priceText = minPrice === maxPrice ? `Rp ${formatNumber(minPrice)}` : `Rp ${formatNumber(minPrice)} - ${formatNumber(maxPrice)}`;
+        return `
         <div class="menu-item fade-in" onclick="openProductDetail('${item.id}')">
             <div class="menu-item-img">
                 ${menuVisual(item)}
-                ${item.badge ? `<span class="menu-item-badge">${item.badge}</span>` : ''}
+                ${item.badge ? `<span class="menu-item-badge">${hppEscape(item.badge)}</span>` : ''}
             </div>
             <div class="menu-item-info">
-                <div class="menu-item-name">${item.name}</div>
-                <div class="menu-item-price">Rp ${formatNumber(item.price)}</div>
-                <div class="menu-item-desc">${item.desc}</div>
+                <div class="menu-item-name">${hppEscape(item.name)}</div>
+                <div class="menu-item-price">${priceText}</div>
+                <div class="menu-item-desc">${hppEscape(item.desc || '')}</div>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 function openProductDetail(itemId) {
@@ -1991,17 +2134,19 @@ function openProductDetail(itemId) {
     if(!item) return;
     state.selectedProduct = item;
 
-    const variants = ['Dingin','Hangat'];
+    const variants = getMenuVariants(item);
+    const firstVariant = variants[0] || {name:'Tanpa varian'};
+    const firstPrice = getMenuVariantPrice(item, firstVariant.name);
     document.getElementById('productDetail').innerHTML = `
         <div class="product-detail-img">${menuVisual(item)}</div>
         <div class="product-detail-info">
-            <h3>${item.name}</h3>
-            <div class="detail-price">Rp ${formatNumber(item.price)}</div>
-            <p>${item.desc}</p>
+            <h3>${hppEscape(item.name)}</h3>
+            <div class="detail-price" id="productDetailPrice">Rp ${formatNumber(firstPrice)}</div>
+            <p>${hppEscape(item.desc || '')}</p>
             <div class="variant-options">
                 <label>Varian</label>
                 <div class="variant-btns">
-                    ${variants.map((v,i) => `<button class="variant-btn ${i===0?'active':''}" onclick="selectVariant(this,'${v}')">${v}</button>`).join('')}
+                    ${variants.map((v,i) => `<button class="variant-btn ${i===0?'active':''}" onclick="selectVariant(this,${i})">${hppEscape(v.name)}${v.price != null ? ` · Rp ${formatNumber(Number(v.price) || 0)}` : ''}</button>`).join('')}
                 </div>
             </div>
             <div class="variant-options">
@@ -2015,15 +2160,19 @@ function openProductDetail(itemId) {
             </div>
         </div>
     `;
-    state.selectedVariant = variants[0];
+    state.selectedVariant = firstVariant.name;
     state.selectedQty = 1;
     openModal('productModal');
 }
 
-function selectVariant(btn, variant) {
-    document.querySelectorAll('.variant-btn').forEach(b => b.classList.remove('active'));
+function selectVariant(btn, variantIndex) {
+    document.querySelectorAll('#productDetail .variant-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    state.selectedVariant = variant;
+    const variants = getMenuVariants(state.selectedProduct);
+    const selected = variants[Number(variantIndex)] || variants[0];
+    state.selectedVariant = selected?.name || 'Tanpa varian';
+    const priceEl = document.getElementById('productDetailPrice');
+    if(priceEl) priceEl.textContent = 'Rp ' + formatNumber(getMenuVariantPrice(state.selectedProduct, state.selectedVariant));
 }
 
 function setSelectedQty(value) {
@@ -2046,13 +2195,15 @@ function addToCartFromModal() {
 
 // ==================== CART ====================
 function addToCart(item, variant, qty = 1) {
-    const selectedVariant = variant || 'Dingin';
+    const variants = getMenuVariants(item);
+    const selectedVariant = variant || variants[0]?.name || 'Tanpa varian';
+    const selectedPrice = getMenuVariantPrice(item, selectedVariant);
     const addQty = Math.max(1, parseInt(qty) || 1);
-    const existing = state.cart.find(c => c.id === item.id && c.variant === selectedVariant);
+    const existing = state.cart.find(c => c.id === item.id && c.variant === selectedVariant && Number(c.price) === Number(selectedPrice));
     if(existing) {
         existing.qty += addQty;
     } else {
-        state.cart.push({...item, qty: addQty, variant: selectedVariant});
+        state.cart.push({...item, price:selectedPrice, qty:addQty, variant:selectedVariant});
     }
     renderCart();
     playSound('add');
@@ -2907,7 +3058,7 @@ function defaultHppRowsForProduct(product, variant) {
     else { add('Bahan Utama', 1, 'porsi'); }
 
     DEFAULT_HPP_FIXED_ITEMS.forEach(row => {
-        const usage = row.name === 'Es Batu' && String(variant) === 'Hangat' ? 0 : row.usage;
+        const usage = row.name === 'Es Batu' && /hangat|panas|hot/i.test(String(variant)) ? 0 : row.usage;
         rows.push({name:row.name, usage, unit:row.unit, price:hppKnownPrice(row.name, row.unit)});
     });
     return rows;
@@ -2919,7 +3070,16 @@ function getSelectedHppProduct() {
 }
 
 function getSelectedHppVariant() {
-    return document.getElementById('hppVariantSelect')?.value || 'Dingin';
+    return document.getElementById('hppVariantSelect')?.value || getMenuVariants(getSelectedHppProduct())[0]?.name || 'Tanpa varian';
+}
+
+function syncHppVariantSelect(product, preferredVariant = '') {
+    const select = document.getElementById('hppVariantSelect');
+    if(!select || !product) return;
+    const variants = getMenuVariants(product);
+    const desired = preferredVariant || select.value || variants[0]?.name || 'Tanpa varian';
+    select.innerHTML = variants.map(v => `<option value="${hppEscape(v.name)}">${hppEscape(v.name)}</option>`).join('');
+    select.value = variants.some(v => v.name === desired) ? desired : (variants[0]?.name || 'Tanpa varian');
 }
 
 function hppMaterialPriceEntries() {
@@ -3059,6 +3219,7 @@ function saveHppMaterialPrices() {
 
     saveData();
     renderHppMaterialPriceEditor();
+    syncHppVariantSelect(getSelectedHppProduct());
     renderHppEditor();
     renderHppSavedList();
     showToast('Master harga bahan disimpan dan HPP diperbarui otomatis');
@@ -3086,6 +3247,7 @@ function renderHppEditor() {
     ensureHppData();
     const product = getSelectedHppProduct();
     if(!product) return;
+    syncHppVariantSelect(product, document.getElementById('hppVariantSelect')?.value || '');
     const variant = getSelectedHppVariant();
     const key = hppKey(product.id, variant);
     const saved = state.hppData.recipes[key];
@@ -3177,7 +3339,7 @@ function hppSalesSummary(product, variant) {
             if(sameProduct && sameVariant) {
                 const itemQty = parseInt(item.qty) || 1;
                 qty += itemQty;
-                revenue += (parseInt(item.price) || product.price || 0) * itemQty;
+                revenue += (parseInt(item.price) || getMenuVariantPrice(product, selectedVariant) || 0) * itemQty;
             }
         });
     });
@@ -3206,7 +3368,7 @@ function updateHppSummary() {
         if(totalUsageEl) totalUsageEl.textContent = hppNumber(usage * sales.qty) + ' ' + unit;
         if(rowCostEl) rowCostEl.textContent = hppMoney(rowCost);
     });
-    const sellingPrice = Number(product.price) || 0;
+    const sellingPrice = getMenuVariantPrice(product, variant);
     const marginPerCup = sellingPrice - hppPerCup;
     const totalHpp = hppPerCup * sales.qty;
     const totalMargin = sales.revenue - totalHpp;
@@ -3255,7 +3417,7 @@ function saveHppRecipe() {
         productId: product.id,
         productName: product.name,
         variant,
-        sellingPrice: Number(product.price) || 0,
+        sellingPrice: getMenuVariantPrice(product, variant),
         materials: materials.map(row => ({...row, price:hppMaterialUnitPrice(row.name, row.unit, row.price)})),
         updatedAt: now,
         updatedBy: state.currentUser ? state.currentUser.id : 'admin'
@@ -3309,7 +3471,8 @@ function loadHppRecipeByKey(key) {
     const productSelect = document.getElementById('hppProductSelect');
     const variantSelect = document.getElementById('hppVariantSelect');
     if(productSelect) productSelect.value = recipe.productId;
-    if(variantSelect) variantSelect.value = recipe.variant || 'Dingin';
+    syncHppVariantSelect(getSelectedHppProduct(), recipe.variant || '');
+    if(variantSelect) variantSelect.value = recipe.variant || getMenuVariants(getSelectedHppProduct())[0]?.name || 'Tanpa varian';
     renderHppRows(recipe.materials || []);
     updateHppSummary();
 }
@@ -3778,16 +3941,27 @@ function loadSettings() {
     if(autoPrintToggle) autoPrintToggle.classList.toggle('active', !!state.settings.autoPrint);
 
     // Menu edit list
+    ensureMenuStructure();
     const menuList = document.getElementById('menuEditList');
-    menuList.innerHTML = state.menu.map((item, idx) => `
-        <div class="setting-item" style="border-bottom:1px solid #f0f0f0">
-            <div class="setting-info">
-                <div class="setting-name">${item.img ? '<img src="' + item.img + '" style="width:28px;height:28px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:6px">' : item.emoji} ${item.name}</div>
-                <div class="setting-desc">Rp ${formatNumber(item.price)} · ${item.category}</div>
-            </div>
-            <button class="btn-secondary" style="padding:6px 12px;font-size:12px" onclick="deleteMenuItem(${idx})">🗑️</button>
-        </div>
-    `).join('');
+    if(menuList) {
+        if(!(state.menu || []).length) {
+            menuList.innerHTML = '<div class="empty-state"><p>Belum ada menu.</p></div>';
+        } else {
+            menuList.innerHTML = state.menu.map((item, idx) => {
+                const variants = getMenuVariants(item);
+                const variantText = variants.map(v => v.name).join(', ');
+                return `
+                <div class="menu-manage-item">
+                    <div class="menu-manage-thumb">${menuVisual(item)}</div>
+                    <div class="menu-manage-main">
+                        <div class="menu-manage-title">${hppEscape(item.name)}</div>
+                        <div class="menu-manage-meta">Rp ${formatNumber(Number(item.price) || 0)} · ${hppEscape(item.category || '-')} · ${hppEscape(variantText)}</div>
+                    </div>
+                    <button class="btn-secondary" style="padding:7px 11px;font-size:12px" onclick="openMenuItemEditor(${idx})">✏️ Edit</button>
+                </div>`;
+            }).join('');
+        }
+    }
 }
 
 function toggleSetting(el) {
@@ -3800,39 +3974,248 @@ function toggleSetting(el) {
     saveData();
 }
 
-function addMenuItem() {
-    const name = document.getElementById('newItemName').value;
-    const price = parseInt(document.getElementById('newItemPrice').value);
-    const cat = document.getElementById('newItemCat').value;
-
-    if(!name || !price) { showToast('Isi nama dan harga!'); return; }
-
-    const newItem = {
-        id: 'new_' + Date.now(),
-        name: name,
-        price: price,
-        category: cat,
-        emoji: '🥤',
-        badge: '',
-        desc: name
+function openMenuItemEditor(idx = -1) {
+    ensureMenuStructure();
+    menuEditorIndex = Number(idx);
+    const isEdit = menuEditorIndex >= 0 && state.menu[menuEditorIndex];
+    const item = isEdit ? state.menu[menuEditorIndex] : {
+        name:'', price:0, category:'coffee', emoji:'🥤', img:'', badge:'', desc:'',
+        variants:[{id:'cold',name:'Dingin',price:null},{id:'hot',name:'Hangat',price:null}]
     };
+    document.getElementById('menuItemEditTitle').textContent = isEdit ? 'Edit Menu' : 'Tambah Menu Baru';
+    document.getElementById('menuEditorName').value = item.name || '';
+    document.getElementById('menuEditorPrice').value = Number(item.price) || '';
+    document.getElementById('menuEditorCategory').value = item.category || 'coffee';
+    document.getElementById('menuEditorBadge').value = item.badge || '';
+    document.getElementById('menuEditorDesc').value = item.desc || '';
+    const fileInput = document.getElementById('menuEditorImageInput');
+    if(fileInput) fileInput.value = '';
+    menuEditorImage = item.img || '';
+    menuEditorImageChanged = false;
+    renderMenuEditorImagePreview(item.emoji || '🥤');
+    renderMenuEditorVariants(getMenuVariants(item));
+    const deleteBtn = document.getElementById('menuEditorDeleteBtn');
+    if(deleteBtn) deleteBtn.style.visibility = isEdit ? 'visible' : 'hidden';
+    openModal('modalMenuItemEdit');
+}
 
-    state.menu.push(newItem);
+function renderMenuEditorImagePreview(fallbackEmoji = '🥤') {
+    const el = document.getElementById('menuEditorImagePreview');
+    if(!el) return;
+    el.innerHTML = menuEditorImage ? `<img src="${menuEditorImage}" alt="Preview menu">` : fallbackEmoji;
+}
+
+function renderMenuEditorVariants(variants) {
+    const box = document.getElementById('menuEditorVariants');
+    if(!box) return;
+    const rows = (variants || []).length ? variants : [{id:'default',name:'Tanpa varian',price:null}];
+    box.innerHTML = rows.map((variant, idx) => `
+        <div class="menu-variant-row" data-menu-variant-row data-variant-id="${hppEscape(variant.id || ('v'+(idx+1)))}">
+            <div class="menu-editor-field"><label>Nama Varian</label><input data-variant-name value="${hppEscape(variant.name || '')}" placeholder="Dingin"></div>
+            <div class="menu-editor-field"><label>Harga Varian</label><input data-variant-price type="number" min="0" step="500" value="${variant.price == null ? '' : hppEscape(variant.price)}" placeholder="Harga dasar"></div>
+            <button type="button" class="menu-variant-remove" title="Hapus varian" onclick="this.closest('[data-menu-variant-row]').remove()">×</button>
+        </div>`).join('');
+}
+
+function addMenuEditorVariant() {
+    const box = document.getElementById('menuEditorVariants');
+    if(!box) return;
+    const idx = box.querySelectorAll('[data-menu-variant-row]').length + 1;
+    box.insertAdjacentHTML('beforeend', `
+        <div class="menu-variant-row" data-menu-variant-row data-variant-id="v${Date.now().toString(36)}${idx}">
+            <div class="menu-editor-field"><label>Nama Varian</label><input data-variant-name value="" placeholder="Nama varian"></div>
+            <div class="menu-editor-field"><label>Harga Varian</label><input data-variant-price type="number" min="0" step="500" value="" placeholder="Harga dasar"></div>
+            <button type="button" class="menu-variant-remove" title="Hapus varian" onclick="this.closest('[data-menu-variant-row]').remove()">×</button>
+        </div>`);
+    const last = box.querySelector('[data-menu-variant-row]:last-child [data-variant-name]');
+    if(last) last.focus();
+}
+
+function collectMenuEditorVariants() {
+    const variants = [];
+    document.querySelectorAll('#menuEditorVariants [data-menu-variant-row]').forEach((row, idx) => {
+        const name = row.querySelector('[data-variant-name]')?.value.trim() || '';
+        const rawPrice = row.querySelector('[data-variant-price]')?.value;
+        const price = rawPrice === '' ? null : Math.max(0, Number(rawPrice) || 0);
+        if(name) variants.push({
+            id: row.dataset.variantId || ('v' + (idx + 1)),
+            name,
+            price
+        });
+    });
+    return variants;
+}
+
+function compressMenuImage(file, maxSize = 720, quality = 0.78) {
+    return new Promise((resolve, reject) => {
+        if(!file || !file.type || !file.type.startsWith('image/')) return reject(new Error('File bukan gambar'));
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Gagal membaca gambar'));
+        reader.onload = () => {
+            const img = new Image();
+            img.onerror = () => reject(new Error('Gambar tidak valid'));
+            img.onload = () => {
+                const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+                const width = Math.max(1, Math.round(img.width * scale));
+                const height = Math.max(1, Math.round(img.height * scale));
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleMenuEditorImage(input) {
+    const file = input?.files?.[0];
+    if(!file) return;
+    try {
+        if(file.size > 12 * 1024 * 1024) { showToast('Ukuran gambar maksimal 12 MB'); input.value = ''; return; }
+        menuEditorImage = await compressMenuImage(file);
+        menuEditorImageChanged = true;
+        renderMenuEditorImagePreview();
+    } catch(e) {
+        console.error(e);
+        showToast('Gambar tidak dapat diproses');
+        input.value = '';
+    }
+}
+
+function removeMenuEditorImage() {
+    menuEditorImage = '';
+    menuEditorImageChanged = true;
+    renderMenuEditorImagePreview('🥤');
+    const input = document.getElementById('menuEditorImageInput');
+    if(input) input.value = '';
+}
+
+function migrateHppVariantNames(product, oldVariants, newVariants) {
+    if(!product || !state.hppData || !state.hppData.recipes) return;
+    const now = new Date().toISOString();
+    const byId = new Map((newVariants || []).map(v => [String(v.id || ''), v]));
+    (oldVariants || []).forEach(oldVariant => {
+        const oldName = oldVariant?.name || '';
+        if(!oldName) return;
+        const replacement = byId.get(String(oldVariant.id || ''));
+        const oldKey = hppKey(product.id, oldName);
+        const recipe = state.hppData.recipes[oldKey];
+        if(!replacement) {
+            if(recipe) {
+                delete state.hppData.recipes[oldKey];
+                state.hppData.deletedRecipes[oldKey] = now;
+            }
+            return;
+        }
+        const newName = replacement.name || oldName;
+        if(newName === oldName) return;
+        const newKey = hppKey(product.id, newName);
+        if(recipe && !state.hppData.recipes[newKey]) {
+            state.hppData.recipes[newKey] = {...recipe, key:newKey, variant:newName, productName:product.name, sellingPrice:getMenuVariantPrice(product, newName), updatedAt:now};
+        }
+        if(recipe) {
+            delete state.hppData.recipes[oldKey];
+            state.hppData.deletedRecipes[oldKey] = now;
+        }
+    });
+}
+
+function saveMenuItemEditor() {
+    const name = document.getElementById('menuEditorName')?.value.trim() || '';
+    const price = Math.max(0, Number(document.getElementById('menuEditorPrice')?.value) || 0);
+    const category = document.getElementById('menuEditorCategory')?.value || 'coffee';
+    const badge = document.getElementById('menuEditorBadge')?.value.trim() || '';
+    const desc = document.getElementById('menuEditorDesc')?.value.trim() || name;
+    let variants = collectMenuEditorVariants();
+    if(!name) { showToast('Nama menu wajib diisi'); return; }
+    if(price <= 0 && (!variants.length || variants.some(v => !(Number(v.price) > 0)))) { showToast('Isi harga dasar atau harga untuk setiap varian'); return; }
+    if(!variants.length) variants = [{id:'default',name:'Tanpa varian',price:null}];
+    const duplicate = new Set();
+    for(const variant of variants) {
+        const key = variant.name.toLowerCase();
+        if(duplicate.has(key)) { showToast('Nama varian tidak boleh sama'); return; }
+        duplicate.add(key);
+    }
+
+    const isEdit = menuEditorIndex >= 0 && state.menu[menuEditorIndex];
+    if(isEdit) {
+        const current = state.menu[menuEditorIndex];
+        const oldVariants = getMenuVariants(current).map(v => ({...v}));
+        const updated = {
+            ...current,
+            name, price, category, badge, desc,
+            img:menuEditorImage,
+            customImage:menuEditorImageChanged ? !!menuEditorImage : !!current.customImage,
+            variants,
+            updatedAt:new Date().toISOString()
+        };
+        state.menu[menuEditorIndex] = updated;
+        state.syncMeta = state.syncMeta || {};
+        state.syncMeta.deletedMenu = state.syncMeta.deletedMenu || {};
+        delete state.syncMeta.deletedMenu[String(updated.id)];
+        migrateHppVariantNames(updated, oldVariants, variants);
+        if(state.hppData?.recipes) {
+            Object.values(state.hppData.recipes).forEach(recipe => {
+                if(String(recipe.productId) === String(updated.id)) {
+                    recipe.productName = updated.name;
+                    recipe.sellingPrice = getMenuVariantPrice(updated, recipe.variant);
+                }
+            });
+        }
+    } else {
+        state.menu.push({
+            id:'menu_' + Date.now().toString(36),
+            name, price, category, emoji:'🥤', img:menuEditorImage, customImage:!!menuEditorImage,
+            badge, desc, variants, updatedAt:new Date().toISOString()
+        });
+        menuEditorIndex = state.menu.length - 1;
+    }
     saveData();
     loadSettings();
-    renderMenu('all');
-    document.getElementById('newItemName').value = '';
-    document.getElementById('newItemPrice').value = '';
-    showToast('Item berhasil ditambahkan!');
+    renderMenu(document.querySelector('.category-tab.active')?.dataset.cat || 'all');
+    closeModal('modalMenuItemEdit');
+    showToast(isEdit ? 'Menu berhasil diperbarui' : 'Menu berhasil ditambahkan');
+}
+
+function addMenuItem() {
+    openMenuItemEditor(-1);
+}
+
+function deleteMenuItemFromEditor() {
+    if(menuEditorIndex < 0 || !state.menu[menuEditorIndex]) return;
+    deleteMenuItem(menuEditorIndex);
+    if(!state.menu[menuEditorIndex] || menuEditorIndex >= state.menu.length) closeModal('modalMenuItemEdit');
 }
 
 function deleteMenuItem(idx) {
-    if(!confirm('Hapus item ini?')) return;
+    const item = state.menu[idx];
+    if(!item) return;
+    if(!confirm(`Hapus menu "${item.name}"?`)) return;
+    state.syncMeta = state.syncMeta || {};
+    state.syncMeta.deletedMenu = state.syncMeta.deletedMenu || {};
+    state.syncMeta.deletedMenu[String(item.id)] = new Date().toISOString();
     state.menu.splice(idx, 1);
+    if(state.cart?.length) state.cart = state.cart.filter(cartItem => cartItem.id !== item.id);
+    if(state.hppData?.recipes) {
+        const now = new Date().toISOString();
+        Object.keys(state.hppData.recipes).forEach(key => {
+            const recipe = state.hppData.recipes[key];
+            if(String(recipe.productId) === String(item.id)) {
+                delete state.hppData.recipes[key];
+                state.hppData.deletedRecipes[key] = now;
+            }
+        });
+    }
     saveData();
     loadSettings();
-    renderMenu('all');
-    showToast('Item dihapus!');
+    renderMenu(document.querySelector('.category-tab.active')?.dataset.cat || 'all');
+    renderCart();
+    closeModal('modalMenuItemEdit');
+    showToast('Menu dihapus');
 }
 
 function backupData() {
@@ -3842,6 +4225,7 @@ function backupData() {
         stockNotes: state.stockNotes,
         hppData: state.hppData,
         menu: state.menu,
+        syncMeta: state.syncMeta,
         users: state.users,
         settings: state.settings,
         backupDate: new Date().toISOString()
@@ -3944,7 +4328,7 @@ document.addEventListener('DOMContentLoaded', init);
 (function () {
   'use strict';
 
-  const VERSION = '3.3.2';
+  const VERSION = '3.4.0';
   const PRIMARY_STORAGE_KEY = 'teco_pos_data';
   const TIME_ZONE = 'Asia/Jakarta';
   const RECIPES_RAW = {"version":"1.1.0","source":"HPP_Resep_Bahan_Penggunaan.xlsx","timezone":"Asia/Jakarta","concentrateBatchYieldMl":1000,"notes":["Hasil 1 batch konsentrat belum tercantum pada file sumber; nilai awal 1000 ml dibuat dapat diedit di pengaturan addon.","Ejaan Fruktosaa dan Gula Arenn dinormalisasi menjadi Fruktosa dan Gula Aren.","Nama resep KOPI MILO dinormalisasi menjadi COFFEE MILO agar sesuai dengan nama menu.","MILO MALAYSIA memakai resep Milo original tanpa sirup rasa."],"recipes":{"KONSENTRAT":[{"material":"Kental Manis","qty":200.0,"unit":"ml"},{"material":"Krimer","qty":100.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":100.0,"unit":"ml"},{"material":"Robusta","qty":45.0,"unit":"gr"},{"material":"Air","qty":800.0,"unit":"ml"}],"RENJANA":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"SAKALA":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"KAHWA":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Sirup Vanilla","qty":5.0,"unit":"ml"},{"material":"Fruktosa","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"AMERICANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"PREMIUM SERIES (BUTTERSCOTCH, CARAMEL, HAZELNUT)":[{"material":"Konsentrat","qty":40.0,"unit":"ml"},{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"NON COFFEE SERIES (MATCHA, CHOCO, TARO, REDVELVET)":[{"material":"Kental Manis","qty":20.0,"unit":"ml"},{"material":"Bubuk Rasa","qty":20.0,"unit":"gr"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHAPRESSO":[{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Krimer","qty":15.0,"unit":"gr"},{"material":"Bubuk Rasa","qty":18.0,"unit":"gr"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MATCHA AREN":[{"material":"Gula Aren","qty":15.0,"unit":"ml"},{"material":"Matcha","qty":18.0,"unit":"gr"},{"material":"Kental Manis","qty":15.0,"unit":"ml"},{"material":"Air Hangat","qty":15.0,"unit":"ml"},{"material":"UHT","qty":100.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO BUTTERSCOTCH, CARAMEL, HAZELNUT":[{"material":"Sirup","qty":15.0,"unit":"ml"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"REDBERRYCANO":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Lemon","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"GOLDEN DRIFT":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Raspberry","qty":10.0,"unit":"ml"},{"material":"Sirup Leci","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"LUMA PEARL":[{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Air Mineral","qty":20.0,"unit":"ml"},{"material":"Sirup Passion Fruit","qty":10.0,"unit":"ml"},{"material":"Air Mineral","qty":130.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"KOPSU PISTACHIO":[{"material":"Konsentrat","qty":60.0,"unit":"ml"},{"material":"Sirup Pistachio","qty":15.0,"unit":"ml"},{"material":"UHT","qty":80.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"},{"material":"Gula Aren","qty":10.0,"unit":"ml"}],"COFFEE MILO":[{"material":"Kental Manis","qty":10.0,"unit":"ml"},{"material":"Robusta","qty":2.0,"unit":"gr"},{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}],"MILO MALAYSIA":[{"material":"Milo","qty":35.0,"unit":"gr"},{"material":"Air Hangat","qty":50.0,"unit":"ml"},{"material":"UHT","qty":50.0,"unit":"ml"},{"material":"Cup + Tutup","qty":1.0,"unit":"pcs"}]}};

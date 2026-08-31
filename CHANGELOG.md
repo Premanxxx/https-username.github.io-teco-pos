@@ -1,3 +1,16 @@
+# v3.4.0 — 1 September 2026
+
+- Mengganti modal Edit Menu menjadi pengaturan menu lengkap dengan daftar item dan editor terpisah.
+- Menambahkan edit nama menu, harga dasar, kategori, badge, dan deskripsi.
+- Menambahkan varian per menu yang dapat ditambah, dihapus, dan diganti namanya.
+- Menambahkan harga opsional per varian dengan fallback ke harga dasar menu.
+- Menghubungkan varian dan harga per varian ke detail produk, keranjang, transaksi, serta perhitungan HPP.
+- Menambahkan upload gambar ilustrasi dari perangkat dengan kompresi otomatis sebelum penyimpanan.
+- Mempertahankan gambar kustom pada local storage dan Firebase tanpa menyimpan ulang gambar bawaan yang besar.
+- Menambahkan tombstone `deletedMenu` agar menu yang dihapus tidak kembali setelah merge sinkronisasi cloud.
+- Memigrasikan kunci HPP saat nama varian diubah dan menghapus HPP terkait saat menu atau varian dihapus.
+- Menjaga kompatibilitas menu lama dengan otomatis memberi varian Dingin dan Hangat jika data varian belum tersedia.
+
 # v3.3.2 — Pengeluaran Bahan Terstruktur
 
 - Menambahkan klasifikasi spesifik bahan baku, seperti Susu & Dairy, Kopi & Konsentrat, Sirup & Pemanis, Bubuk & Bahan Kering, Air & Es Batu, serta Kemasan.

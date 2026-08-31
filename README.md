@@ -1,4 +1,4 @@
-# Te.Co Pandawa POS v3.3.2
+# Te.Co Pandawa POS v3.4.0
 
 Pembaruan v3.3.1 memperbaiki tampilan tab **Laporan & Analisis**. Komponen laporan kini dipasang sebagai konten penuh halaman, bukan di dalam header flex. Stylesheet laporan juga ditautkan langsung pada seluruh halaman aplikasi sehingga kartu ringkasan, toolbar, tabel, status HPP, dan panel Admin tampil konsisten di desktop maupun ponsel.
 
@@ -20,6 +20,14 @@ Data `materialPrices` disimpan dalam `hppData` versi 3 dan ikut disinkronkan mel
 
 Buka `index.html` melalui GitHub Pages atau jalankan `server.js`. Petunjuk Firebase terdapat di `FIREBASE_SETUP.md`.
 
+
+## Pembaruan v3.4.0 — Pengaturan Menu Lengkap
+
+Pengaturan menu sekarang mendukung pengelolaan item secara penuh dari antarmuka Admin. Setiap menu dapat diedit nama, harga dasar, kategori, badge, deskripsi, gambar ilustrasi, dan daftar variannya. Varian dapat ditambah, dihapus, atau diganti namanya. Harga khusus per varian bersifat opsional. Jika harga varian dikosongkan, sistem memakai harga dasar menu.
+
+Gambar yang diunggah otomatis diperkecil sebelum disimpan. Gambar bawaan tetap tidak disalin ke payload penyimpanan agar ukuran data tidak membengkak, sedangkan gambar kustom ditandai dan dipertahankan pada local storage serta sinkronisasi cloud. Penghapusan menu memakai tombstone `deletedMenu` agar item yang sudah dihapus tidak muncul kembali saat data lokal digabung dengan Firebase.
+
+Perubahan nama varian juga diselaraskan dengan data HPP terkait. Pemilih varian pada modul HPP kini mengikuti daftar varian masing-masing menu, dan harga jual HPP memakai harga varian bila tersedia.
 
 ## Pembaruan v3.3.2 — Pengeluaran Bahan Terstruktur
 

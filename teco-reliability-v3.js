@@ -1,8 +1,8 @@
-/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.3.0 */
+/* Te.Co Pandawa POS - Reliability & Firebase Cloud Backup v3.4.0 */
 (function () {
   'use strict';
 
-  const VERSION = '3.3.0';
+  const VERSION = '3.4.0';
   const PRIMARY_KEY = 'teco_pos_data';
   const EMERGENCY_KEY = 'teco_pos_emergency_backup_v3';
   const DEVICE_KEY = 'teco_pos_device_id_v3';
@@ -267,12 +267,17 @@
     return rows.sort((a, b) => recordTime(b) - recordTime(a));
   }
 
-  function mergeMenu(localMenu, remoteMenu) {
+  function mergeMenu(localMenu, remoteMenu, tombstones) {
     const map = new Map();
-    asList(remoteMenu).forEach((item, i) => map.set(String(item.id || `remote-${i}`), clone(item)));
+    const deleted = tombstones || {};
+    asList(remoteMenu).forEach((item, i) => {
+      const id = String(item.id || `remote-${i}`);
+      if (!Object.prototype.hasOwnProperty.call(deleted, id)) map.set(id, clone(item));
+    });
     asList(localMenu).forEach((item, i) => {
       const id = String(item.id || `local-${i}`);
-      map.set(id, { ...(map.get(id) || {}), ...clone(item) });
+      if (Object.prototype.hasOwnProperty.call(deleted, id)) return;
+      map.set(id, preferRecord(map.get(id), clone(item)));
     });
     return Array.from(map.values());
   }
@@ -295,6 +300,7 @@
       deletedTransactions: mergeTombstones(remoteMeta.deletedTransactions, localMeta.deletedTransactions),
       deletedExpenses: mergeTombstones(remoteMeta.deletedExpenses, localMeta.deletedExpenses),
       deletedStockNotes: mergeTombstones(remoteMeta.deletedStockNotes, localMeta.deletedStockNotes),
+      deletedMenu: mergeTombstones(remoteMeta.deletedMenu, localMeta.deletedMenu),
       lastMergedAt: nowIso()
     };
 
@@ -310,7 +316,7 @@
       expenses: mergeRecords(local.expenses, remote.expenses, 'EXP', 'expense', syncMeta.deletedExpenses),
       stockNotes: mergeRecords(local.stockNotes, remote.stockNotes, 'STK', 'stock', syncMeta.deletedStockNotes),
       hppData: mergeHppData(local.hppData, remote.hppData),
-      menu: mergeMenu(local.menu, remote.menu),
+      menu: mergeMenu(local.menu, remote.menu, syncMeta.deletedMenu),
       users: { ...(fallback.users || {}), ...(preferred.users || {}) },
       settings: { ...(fallback.settings || {}), ...(preferred.settings || {}) },
       syncMeta,
@@ -323,7 +329,9 @@
   function sanitizeMenu(menu) {
     return asList(menu).map((item) => {
       const out = { ...item };
-      if (typeof out.img === 'string' && out.img.startsWith('data:image/')) delete out.img;
+      // Gambar bawaan sudah tertanam di index.html dan tidak perlu disalin ke storage/cloud.
+      // Gambar yang diunggah pengguna ditandai customImage dan harus dipertahankan.
+      if (typeof out.img === 'string' && out.img.startsWith('data:image/') && !out.customImage) delete out.img;
       return out;
     });
   }
@@ -346,7 +354,7 @@
       users: state.users || {},
       settings: state.settings || {},
       syncMeta: state.syncMeta || existing.syncMeta || {
-        deletedTransactions: {}, deletedExpenses: {}, deletedStockNotes: {}
+        deletedTransactions: {}, deletedExpenses: {}, deletedStockNotes: {}, deletedMenu: {}
       },
       updatedAt: nowIso(),
       updatedBy: state.currentUser ? state.currentUser.id : 'system',
@@ -364,8 +372,10 @@
     state.menu = asList(payload.menu);
     state.users = payload.users && typeof payload.users === 'object' ? payload.users : {};
     state.settings = { ...state.settings, ...(payload.settings || {}) };
-    state.syncMeta = payload.syncMeta || { deletedTransactions: {}, deletedExpenses: {}, deletedStockNotes: {} };
+    state.syncMeta = payload.syncMeta || { deletedTransactions: {}, deletedExpenses: {}, deletedStockNotes: {}, deletedMenu: {} };
+    state.syncMeta.deletedMenu = state.syncMeta.deletedMenu || {};
     state.extraData = extraFields(payload);
+    if (typeof ensureMenuStructure === 'function') ensureMenuStructure();
     if (typeof ensureMenuImages === 'function') ensureMenuImages();
     if (refreshUI && typeof refreshAfterDataUpdate === 'function') refreshAfterDataUpdate();
     return true;
@@ -692,7 +702,10 @@
 
   function addTombstone(kind, ids) {
     state.syncMeta = state.syncMeta || {};
-    const key = kind === 'transaction' ? 'deletedTransactions' : kind === 'expense' ? 'deletedExpenses' : 'deletedStockNotes';
+    const key = kind === 'transaction' ? 'deletedTransactions'
+      : kind === 'expense' ? 'deletedExpenses'
+      : kind === 'menu' ? 'deletedMenu'
+      : 'deletedStockNotes';
     state.syncMeta[key] = state.syncMeta[key] || {};
     asList(ids).forEach((id) => { state.syncMeta[key][String(id)] = nowIso(); });
   }
@@ -931,7 +944,7 @@
     const month = document.getElementById('exportMonth');
     if (month && !month.value) month.value = new Date().toISOString().slice(0, 7);
     const version = document.querySelector('.version-tag');
-    if (version) version.textContent = 'v3.3.0 · Master Harga Bahan · HPP-sync';
+    if (version) version.textContent = 'v3.4.0 · Menu Editor · HPP-sync';
     const storageInfo = document.getElementById('syncStorageStats');
     if (storageInfo) {
       const bytes = (localStorage.getItem(PRIMARY_KEY) || '').length * 2;
